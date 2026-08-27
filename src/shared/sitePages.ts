@@ -258,9 +258,13 @@ function slug(v: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-/** Every way a page can answer to a route name, cheapest first. */
-function keysFor(page: SitePage): string[] {
-  const keys = [slug(page.alias), slug(page.path), slug(page.title)];
+/**
+ * The page's STRUCTURAL identities — what Duda actually calls it. An alias, its
+ * full path, and its last path segment all come from the site's routing, so a
+ * match on one of these means the route names this page in the URL sense.
+ */
+function routeKeys(page: SitePage): string[] {
+  const keys = [slug(page.alias), slug(page.path)];
   // The last path segment, so `/company-information` is findable as the leaf of
   // a nested path too.
   const tail = page.path.split('/').filter(Boolean).pop();
@@ -269,23 +273,61 @@ function keysFor(page: SitePage): string[] {
 }
 
 /**
+ * The page's DISPLAY name. Matched only as a fallback — see `findSitePage`.
+ */
+function titleKey(page: SitePage): string {
+  return slug(page.title);
+}
+
+/**
  * The page a route names, or null.
  *
  * BREADTH-FIRST on purpose: a top-level `/company-information` must win over a
  * same-named child parked under some other section, otherwise which branch the
  * footer renders would depend on the editor's page ORDER.
+ *
+ * ── STRUCTURE FIRST, TITLE ONLY AS A FALLBACK ───────────────────────────────
+ * These used to be one pass over alias + path + tail + TITLE together, and the
+ * title being equal to the rest is how a route can resolve to a branch the
+ * operator never meant. Delete the `/legal-pages` section but leave any page
+ * anywhere in the tree still TITLED "Legal Pages", and the old single pass
+ * matched that page breadth-first and listed all of ITS children — which reads
+ * exactly like "the deleted pages are still cached in the footer", because the
+ * rows come back with the same labels the deleted section had.
+ *
+ * Two passes fix it without giving up the convenience: a route that names a real
+ * path always wins, and a title match is only reached when nothing in the site's
+ * routing answers to that name at all. A title-only match is `console.warn`ed,
+ * because it is a guess and it is the case worth knowing about.
  */
 export function findSitePage(pages: SitePage[], route: string): SitePage | null {
   const want = slug(route);
   if (!want) return null;
-  let level = pages;
-  while (level.length) {
-    for (const page of level) {
-      if (keysFor(page).includes(want)) return page;
+
+  const breadthFirst = (match: (page: SitePage) => boolean): SitePage | null => {
+    let level = pages;
+    while (level.length) {
+      for (const page of level) {
+        if (match(page)) return page;
+      }
+      level = level.flatMap((p) => p.children);
     }
-    level = level.flatMap((p) => p.children);
+    return null;
+  };
+
+  const structural = breadthFirst((page) => routeKeys(page).includes(want));
+  if (structural) return structural;
+
+  const byTitle = breadthFirst((page) => titleKey(page) === want);
+  if (byTitle) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[sitePages] no page has the path or alias "${route}" — matched the page TITLED `
+      + `"${byTitle.title}" (${byTitle.path}) instead. If that section was deleted, this `
+      + `is a different page answering to its name; set the route to a real path.`,
+    );
   }
-  return null;
+  return byTitle;
 }
 
 export interface PageLinkOptions {
@@ -326,24 +368,86 @@ export function descendantPages(branch: SitePage, opts: PageLinkOptions = {}): S
   return out;
 }
 
+export interface PageColumn {
+  /** The first matched branch's own title — the column heading. */
+  heading: string;
+  /** Every linkable page under the matched routes, de-duplicated by href. */
+  links: { label: string; href: string }[];
+  /** Routes that matched a branch with at least one linkable page under it. */
+  matched: string[];
+  /** Routes that are not in the tree, or whose branch has nothing linkable. */
+  missing: string[];
+}
+
 /**
- * The footer-ready form: `{ label, href }` per page under `route`, plus the
- * branch's own title for the column heading. Null when the route isn't in the
- * tree or has nothing under it — callers keep their hardcoded column, which is
- * what the Duda editor and the dev harness always see.
+ * Split a route FIELD into routes. A Duda content-menu field is one text input,
+ * so several routes have to share it — comma separated
+ * (`company-information, legal-pages`). Order is the operator's: it decides
+ * which branch supplies the heading and which pages come first.
+ *
+ * Duplicates are dropped here; overlapping BRANCHES are handled by the href
+ * de-duplication in `pageColumnFor` (a `legal-pages` branch nested under
+ * `company-information` is matched by both routes and must not list twice).
+ */
+export function parseRoutes(v: string | string[] | undefined | null): string[] {
+  const raw = Array.isArray(v) ? v : String(v ?? '').split(/[,\n]/);
+  const out: string[] = [];
+  for (const r of raw) {
+    const route = String(r ?? '').trim();
+    if (route && !out.includes(route)) out.push(route);
+  }
+  return out;
+}
+
+/**
+ * The footer-ready form: one column's worth of `{ label, href }` gathered from
+ * EVERY route in `routes`, in the order given, plus the heading to print above
+ * them.
+ *
+ * `links` is empty when no route matched. That is a real answer, not a failure:
+ * the caller renders NO COLUMN rather than a hardcoded stand-in, because a
+ * placeholder list is indistinguishable from a working one and its links go
+ * nowhere on a deployed site. `matched`/`missing` are what a caller warns with.
  */
 export function pageColumnFor(
   pages: SitePage[],
-  route: string,
+  routes: string | string[],
   opts: PageLinkOptions = {},
-): { heading: string; links: { label: string; href: string }[] } | null {
-  const branch = findSitePage(pages, route);
-  if (!branch) return null;
-  const links = descendantPages(branch, opts)
-    // No path means nothing to link to; a label with no destination is worse
-    // than one fewer row.
-    .filter((p) => p.path)
-    .map((p) => ({ label: p.title || p.path.split('/').filter(Boolean).pop() || p.path, href: p.path }));
-  if (!links.length) return null;
-  return { heading: branch.title || route, links };
+): PageColumn {
+  const links: { label: string; href: string }[] = [];
+  const seen = new Set<string>();
+  const matched: string[] = [];
+  const missing: string[] = [];
+  let heading = '';
+
+  for (const route of parseRoutes(routes)) {
+    const branch = findSitePage(pages, route);
+    const found = branch
+      ? descendantPages(branch, opts)
+        // No path means nothing to link to; a label with no destination is
+        // worse than one fewer row.
+        .filter((p) => p.path)
+        .map((p) => ({
+          label: p.title || p.path.split('/').filter(Boolean).pop() || p.path,
+          href: p.path,
+        }))
+      : [];
+    if (!found.length) {
+      missing.push(route);
+      continue;
+    }
+    matched.push(route);
+    if (!heading) heading = branch!.title || route;
+    for (const link of found) {
+      // Two routes can name overlapping branches — most obviously a
+      // `legal-pages` section that lives UNDER `company-information`, which the
+      // parent route already flattened. First occurrence wins, so the column
+      // follows the operator's route order.
+      if (seen.has(link.href)) continue;
+      seen.add(link.href);
+      links.push(link);
+    }
+  }
+
+  return { heading, links, matched, missing };
 }

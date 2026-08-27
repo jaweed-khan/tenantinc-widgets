@@ -32,6 +32,9 @@
     .widget-section > h2 { font-size: 13px; font-weight: 600; text-transform: uppercase;
       letter-spacing: .05em; color: #6b7280; margin: 0 0 8px; }
     .widget-container { min-height: 60px; }
+    /* Harness-only explanatory text under a section heading. */
+    .section-note { font-size: 12px; line-height: 1.5; color: #6b7280; margin: 0 0 12px; max-width: 78ch; }
+    .section-note code { background: #f3f4f6; padding: 1px 4px; border-radius: 3px; font-size: 11px; }
     .controls { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
     .controls-group { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 8px 12px; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; }
     .controls-group-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: #9ca3af; width: 100%; margin-bottom: 2px; }
@@ -461,6 +464,13 @@
   <!-- ── widget-footer ────────────────────────────────────────────────── -->
   <div class="widget-section">
     <h2>widget-footer (#13)</h2>
+    <p class="section-note">The <strong>Company Information</strong> and <strong>Storage Types</strong>
+      columns are built entirely from the site's page tree (<code>dmAPI.getNavItemsAsync()</code>) —
+      there is no hardcoded fallback any more. With no <code>dmAPI</code>, Storage Types is
+      simply <em>absent</em> and Company Information shows <strong>Sitemap</strong> alone
+      (<code>/sitemap.xml</code> needs no page tree), exactly as in the Duda editor. Reload
+      with <code>?mockCollections=1</code> to see them populated, including the merge of
+      <code>company-information/*</code> and <code>legal-pages/*</code>.</p>
     <div id="footer-container" class="widget-container"></div>
   </div>
 
@@ -508,6 +518,13 @@
     <!-- ── widget-footer (shared instance, re-mounted on tab switch) ─── -->
     <div class="widget-section">
       <h2>widget-footer (#13)</h2>
+    <p class="section-note">The <strong>Company Information</strong> and <strong>Storage Types</strong>
+      columns are built entirely from the site's page tree (<code>dmAPI.getNavItemsAsync()</code>) —
+      there is no hardcoded fallback any more. With no <code>dmAPI</code>, Storage Types is
+      simply <em>absent</em> and Company Information shows <strong>Sitemap</strong> alone
+      (<code>/sitemap.xml</code> needs no page tree), exactly as in the Duda editor. Reload
+      with <code>?mockCollections=1</code> to see them populated, including the merge of
+      <code>company-information/*</code> and <code>legal-pages/*</code>.</p>
       <div id="footer-container-blog" class="widget-container"></div>
     </div>
 
@@ -565,6 +582,13 @@
     <!-- ── widget-footer (shared instance, re-mounted on tab switch) ─── -->
     <div class="widget-section">
       <h2>widget-footer (#13)</h2>
+    <p class="section-note">The <strong>Company Information</strong> and <strong>Storage Types</strong>
+      columns are built entirely from the site's page tree (<code>dmAPI.getNavItemsAsync()</code>) —
+      there is no hardcoded fallback any more. With no <code>dmAPI</code>, Storage Types is
+      simply <em>absent</em> and Company Information shows <strong>Sitemap</strong> alone
+      (<code>/sitemap.xml</code> needs no page tree), exactly as in the Duda editor. Reload
+      with <code>?mockCollections=1</code> to see them populated, including the merge of
+      <code>company-information/*</code> and <code>legal-pages/*</code>.</p>
       <div id="footer-container-post" class="widget-container"></div>
     </div>
 
@@ -705,20 +729,11 @@
       <div class="controls">
         <div class="controls-group">
           <span class="controls-group-label">Search widget</span>
-          <label>Layout:
-            <select id="hs-layout" onchange="reinitHomepageSearch()" style="padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px;">
-              <option value="search-bar">Layout 1 — Search bar</option>
-              <option value="promo-card">Layout 2 — Promo card</option>
-            </select>
-          </label>
           <label>Search URL:
             <input id="hs-search-url" type="text" value="/property-landing-page--value-tiers-test" style="width:260px; padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px;" oninput="reinitHomepageSearch()" />
           </label>
-          <label>Locations URL:
+          <label>City page base:
             <input id="hs-locations-url" type="text" value="/locations" style="width:130px; padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px;" oninput="reinitHomepageSearch()" />
-          </label>
-          <label>Locations count:
-            <input id="hs-locations-count" type="number" min="0" value="29" style="width:70px; padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px;" oninput="reinitHomepageSearch()" />
           </label>
           <label>Recent searches:
             <input id="hs-history-limit" type="number" min="0" max="5" value="5" style="width:60px; padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px;" oninput="reinitHomepageSearch()" />
@@ -732,18 +747,6 @@
           </label>
           <label>Accent color:
             <input id="hs-accent" type="text" placeholder="(theme --color_2 / red)" style="width:150px; padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px;" oninput="reinitHomepageSearch()" />
-          </label>
-          <label>Card heading:
-            <input id="hs-card-heading" type="text" value="Find Storage Near Me" style="width:190px; padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px;" oninput="reinitHomepageSearch()" />
-          </label>
-          <label>Promotion:
-            <input id="hs-promotion" type="text" value="$1 Summer Move-In" style="width:175px; padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px;" oninput="reinitHomepageSearch()" />
-          </label>
-          <label>Final line:
-            <input id="hs-promotion-suffix" type="text" value="Special" style="width:100px; padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px;" oninput="reinitHomepageSearch()" />
-          </label>
-          <label>Promo disclaimer:
-            <input id="hs-promotion-disclaimer" type="text" value="*All new rentals are subject to a $30 Admin Fee. Other fees like coverage may apply, select a space to see price details." style="width:360px; padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px;" oninput="reinitHomepageSearch()" />
           </label>
         </div>
       </div>
@@ -853,6 +856,12 @@
       // three page levels. "Careers" is visible:false on purpose — a page hidden
       // from the NAV, which the footer lists anyway (that is what a footer column
       // is for) unless skipHiddenPages is set.
+      // "Legal Pages" is a SECOND top-level branch feeding the SAME footer
+      // column — #13's companyRoute defaults to
+      // `company-information,legal-pages` — so this tree exercises the merge.
+      // The branch itself is visible:false, which is the realistic shape: a
+      // legal section kept out of the top nav is exactly what a footer column is
+      // for, and the footer lists it anyway.
       var NAV_ITEMS = [
         { title: 'Home', alias: 'home', uuid: 'p-home', path: 'home', visible: true, subNav: [] },
         { title: 'Company Information', alias: 'company-information', uuid: 'p-ci',
@@ -876,6 +885,17 @@
                 { title: 'Accessibility', alias: 'accessibility', uuid: 'p-ci-5c',
                   path: 'company-information/legal/accessibility', visible: true, subNav: [] }
               ] }
+          ] },
+        { title: 'Legal Pages', alias: 'legal-pages', uuid: 'p-lp',
+          path: 'legal-pages', visible: false, subNav: [
+            { title: 'Privacy Policy', alias: 'privacy-policy', uuid: 'p-lp-1',
+              path: 'legal-pages/privacy-policy', visible: true, subNav: [] },
+            { title: 'Terms of Use', alias: 'terms-of-use', uuid: 'p-lp-2',
+              path: 'legal-pages/terms-of-use', visible: true, subNav: [] },
+            { title: 'Online Privacy Opt-Out', alias: 'online-privacy-opt-out', uuid: 'p-lp-3',
+              path: 'legal-pages/online-privacy-opt-out', visible: false, subNav: [] },
+            { title: 'Accessibility Statement', alias: 'accessibility-statement', uuid: 'p-lp-4',
+              path: 'legal-pages/accessibility-statement', visible: true, subNav: [] }
           ] },
         { title: 'Storage Types', alias: 'storage-types', uuid: 'p-st',
           path: 'storage-types', visible: true, subNav: [
@@ -1454,20 +1474,14 @@
       return {
         searchUrl:      document.getElementById('hs-search-url').value,
         locationsUrl:   document.getElementById('hs-locations-url').value,
-        locationsCount: Number(document.getElementById('hs-locations-count').value) || 0,
         historyLimit:    Number(document.getElementById('hs-history-limit').value),
         ctaLabel:       document.getElementById('hs-cta').value || 'Find',
         showStorageType: document.getElementById('hs-show-type').checked,
         storageTypes:   document.getElementById('hs-types').value,
         accentColor:    document.getElementById('hs-accent').value.trim() || undefined,
-        // Belongs here, not in getNavProps() where fd156c6 put it — `layout`
-        // is a homepage-search prop, so from the nav's object it never
-        // reached this widget and the selector did nothing.
-        layout:         document.getElementById('hs-layout').value,
-        cardHeading:    document.getElementById('hs-card-heading').value,
-        promotionText:  document.getElementById('hs-promotion').value,
-        promotionSuffix: document.getElementById('hs-promotion-suffix').value,
-        promotionDisclaimer: document.getElementById('hs-promotion-disclaimer').value,
+        // No `layout` / `cardHeading` / `promotion*` any more: #04 has ONE
+        // layout, the search bar. The promo card and the "See our N Locations"
+        // bar are retired, CSS included.
       };
     }
 

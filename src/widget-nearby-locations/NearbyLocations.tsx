@@ -207,7 +207,6 @@ function SpaceRow({
         <span className="nl-space-subtype">{space.subtype}</span>
       </div>
       <div className="nl-space-prices">
-        <span className="nl-price-tag"><TagIcon size={16} /></span>
         <div className="nl-price-strike">
           <span className="nl-price-strike-label">IN-STORE</span>
           <span className="nl-price-strike-value">${space.inStorePrice}</span>
@@ -237,6 +236,53 @@ function SpaceRow({
         ) : (
           <span className="nl-select-btn nl-select-btn--inert">Select</span>
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * How many space rows every card reserves — see `ReservedSpaceRow`. It is also
+ * what `fetchPropertySpaces` returns at most (the cheapest three), so a fully
+ * stocked facility fills the slots exactly and none of them go to waste.
+ */
+const SPACE_SLOTS = 3;
+
+/**
+ * An INVISIBLE copy of a real space row, used to pad a facility that lists
+ * fewer than `SPACE_SLOTS` spaces.
+ *
+ * The point is constant card height: the mobile carousel shows one card at a
+ * time and the desktop grid pages three or six, so a facility with one bookable
+ * size next to one with three made the card jump as the visitor moved between
+ * them. Padding the list keeps every card the same height whatever it holds.
+ *
+ * **It is the real markup with `visibility: hidden`, deliberately not a
+ * `min-height` in pixels.** The row's height comes from its own contents — the
+ * size/subtype lines against the Select button — so a copy of those contents
+ * tracks any change to them automatically, where a hardcoded number silently
+ * stops matching the moment the button's padding or a font size moves. The text
+ * is placeholder and never read: `visibility: hidden` takes it out of the
+ * accessibility tree, and `aria-hidden` says so for anything that disagrees.
+ */
+function ReservedSpaceRow() {
+  return (
+    <div className="nl-space-row nl-space-row--reserved" aria-hidden="true">
+      <div className="nl-space-info">
+        <span className="nl-space-size">5&apos; x 5&apos;</span>
+        <span className="nl-space-subtype">Reserved</span>
+      </div>
+      <div className="nl-space-prices">
+        <div className="nl-price-strike">
+          <span className="nl-price-strike-label">IN-STORE</span>
+          <span className="nl-price-strike-value">$0</span>
+        </div>
+        <span className="nl-price-divider" />
+        <div className="nl-price-start">
+          <span className="nl-price-start-label">STARTING AT</span>
+          <span className="nl-price-start-value">$0</span>
+        </div>
+        <span className="nl-select-btn">Select</span>
       </div>
     </div>
   );
@@ -341,11 +387,24 @@ function PropertyCard({
               </div>
             )}
 
-            {property.spaces.length > 0 && (
-              <div className="nl-spaces">
-                {property.spaces.map((space, i) => (
-                  <React.Fragment key={`${space.size}-${i}`}>
-                    {i > 0 && <span className="nl-space-divider" />}
+            {/* ALWAYS `SPACE_SLOTS` rows, real ones first and invisible ones
+                after, so every card is the same height whether the facility
+                lists three bookable sizes or one. The block is unconditional
+                for the same reason — a facility with nothing bookable used to
+                omit it entirely and come out dramatically shorter than its
+                neighbours.
+
+                A divider belongs BETWEEN two real rows, so the one that would
+                introduce a reserved row is reserved too: it keeps its 25px of
+                height (1px rule + 12px margins) and draws nothing, which is
+                what stops a hairline trailing off under the last real row. */}
+            <div className="nl-spaces">
+              {Array.from({ length: SPACE_SLOTS }, (_, i) => property.spaces?.[i]).map((space, i) => (
+                <React.Fragment key={i}>
+                  {i > 0 && (
+                    <span className={`nl-space-divider${space ? '' : ' nl-space-divider--reserved'}`} />
+                  )}
+                  {space ? (
                     <SpaceRow
                       space={space}
                       propertyId={property.id}
@@ -355,26 +414,47 @@ function PropertyCard({
                       valueTiersChannel={valueTiersChannel}
                       valueTiersPageUrl={valueTiersPageUrl}
                     />
-                  </React.Fragment>
-                ))}
+                  ) : (
+                    <ReservedSpaceRow />
+                  )}
+                </React.Fragment>
+              ))}
+            </div>
+
+            {/* The promo's height, reserved when the facility has no promo —
+                and placed AFTER the spaces so the visible content still moves
+                UP to fill the gap rather than sitting under a blank band. The
+                footer's `margin-top: auto` keeps it on the bottom edge either
+                way, so the card's total height is the same as a promo card's.
+                A hidden copy of the real bar rather than a pixel height, for
+                the reason `ReservedSpaceRow` is one. */}
+            {!property.promo && (
+              <div className="nl-promo nl-promo--reserved" aria-hidden="true">
+                <TagIcon size={16} />
+                <span className="nl-promo-text">Reserved</span>
               </div>
             )}
           </>
         )}
 
-        <div className="nl-card-footer">
+        {/* THE WHOLE FOOTER IS THE LINK, not just "See All Spaces" — the
+            admin-fee line and the space between the two are the same target as
+            the label. So the footer is the <a> and the label is a SPAN: an <a>
+            cannot nest inside an <a>, and the outer one is the bigger hit area.
+            An anchor rather than a click handler for the reason the photo link
+            is one — Duda's router handles a real link in preview and published
+            alike, and middle-click survives.
+            Offered however few spaces the card lists: it goes to the facility's
+            own page, not just "more of this list".
+            Always rendered, and the label always keeps the CTA colour +
+            underline: the footer must read the same from card to card. `href` is
+            simply absent when the row carries no slug — there is nowhere to
+            point, and the base path alone would land on a page that is not this
+            facility. */}
+        <a className="nl-card-footer" href={propertyHref}>
           <span className="nl-admin-fee">+ Plus ${property.adminFee} Admin Fee</span>
-          {/* Offered however few spaces the card lists — it goes to the
-              facility's own page, not just "more of this list". Absent only when
-              the row carries no slug and there is nowhere to point. */}
-          {/* Always rendered, and always the CTA colour + underline: the footer
-              must read the same from card to card. `href` is simply absent when
-              the row carries no slug — there is nowhere to point, and the base
-              path alone would land on a page that is not this facility. */}
-          <a className="nl-see-all" href={propertyHref}>
-            See All Spaces
-          </a>
-        </div>
+          <span className="nl-see-all">See All Spaces</span>
+        </a>
       </div>
     </div>
   );
@@ -423,6 +503,13 @@ function SpacesSkeleton() {
     </div>
   );
 }
+
+/**
+ * How long #07 will sit on skeleton cards before giving up. See `stalled` — it
+ * is a backstop for an unbounded `await`, not part of the normal load, and it is
+ * deliberately longer than the bounded chain's worst legitimate case.
+ */
+const STALL_DEADLINE_MS = 30000;
 
 function SkeletonCard() {
   return (
@@ -609,6 +696,25 @@ export function NearbyLocations({
 
   // null = still loading; [] = loaded but nothing to show.
   const [apiProperties, setApiProperties] = useState<Property[] | null>(null);
+  /**
+   * Last resort: nothing has painted and we have stopped waiting.
+   *
+   * Every boundary below is bounded now (`@shared/withTimeout`), so this should
+   * not fire — it exists because "the widget never leaves its skeletons" is the
+   * one failure a visitor cannot recover from, and a single unbounded `await`
+   * anywhere in the chain reintroduces it. Cheap insurance against the next one.
+   *
+   * NOT the same as `apiProperties = []`, and the distinction matters:
+   * `emptyMessage` reads an empty ARRAY as "the filter matched nothing" and would
+   * announce "No featured facilities yet — set nearbyLocationPriorityOrder…",
+   * diagnosing an operator error that did not happen. This flag ends the loading
+   * state without claiming anything about the data.
+   *
+   * It is also NOT terminal: the effect keeps running, so a slow answer still
+   * lands and replaces what this fell back to. That is what makes the deadline
+   * safe to set at a length a legitimate load could occasionally exceed.
+   */
+  const [stalled, setStalled] = useState(false);
   // Reference coordinates (map centre).
   const [refLoc, setRefLoc] = useState<{ lat: number; lng: number } | null>(null);
 
@@ -620,6 +726,19 @@ export function NearbyLocations({
     setRefLoc(null);
     setPage(0);
     setMobileIdx(0);
+    setStalled(false);
+
+    // The bounded chain's absolute worst case is a little OVER this — the
+    // collection wait plus a timed-out read plus a timed-out REST fall-back for
+    // the properties, then the priority order and the hero photos in sequence —
+    // so an extraordinarily slow load can be pre-empted. That is deliberate
+    // rather than a miscalculation: sizing the deadline to the theoretical worst
+    // case would put it near a minute, where it stops being a rescue. It is safe
+    // because it is not terminal — see `stalled`; the answer still lands and
+    // replaces what this fell back to.
+    const deadline = setTimeout(() => {
+      if (!cancelled) setStalled(true);
+    }, STALL_DEADLINE_MS);
 
     (async () => {
       try {
@@ -768,14 +887,16 @@ export function NearbyLocations({
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => { cancelled = true; clearTimeout(deadline); };
   }, [radiusMiles, adminFee, propertyId, featured, cap, internalCollection]);
 
   // While loading we render skeleton cards — showing DEMO_PROPERTIES here meant
   // real-looking names/prices flashed up and were then replaced. Demo data is
   // still the fallback for an EMPTY result, so the section never renders blank in
   // the editor/preview.
-  const loading = apiProperties === null;
+  // `stalled` ends the loading state without pretending the data arrived — the
+  // fallback below is then the same one the unreachable-API `catch` produces.
+  const loading = apiProperties === null && !stalled;
   const properties = apiProperties && apiProperties.length ? apiProperties : DEMO_PROPERTIES;
   /**
    * Why the list is empty, when it is — or `null` to fall back to demo cards.
@@ -790,7 +911,10 @@ export function NearbyLocations({
    * in needs to be told that, not shown six invented facilities.
    */
   const emptyMessage =
-    !loading && apiProperties!.length === 0
+    // `apiProperties` rather than `!loading`: a stalled load also ends `loading`,
+    // and it has no idea whether a filter matched anything. Only a completed read
+    // that came back empty may name a reason.
+    apiProperties && apiProperties.length === 0
       ? featured
         ? `No featured facilities yet — set “nearbyLocationPriorityOrder” on the properties to feature.`
         : radiusMiles > 0
@@ -847,7 +971,7 @@ export function NearbyLocations({
     let cancelled = false;
     missing.forEach((id) => spacesInFlight.current.add(id));
 
-    void fetchSpacesForProperties(missing, (id, data) => {
+    fetchSpacesForProperties(missing, (id, data) => {
       spacesCache.current.set(id, data);
       spacesInFlight.current.delete(id);
       if (cancelled) return;
@@ -858,6 +982,16 @@ export function NearbyLocations({
             )
           : prev,
       );
+    }).catch((err) => {
+      // `fetchSpacesForProperties` now guarantees a result per id even when it
+      // throws, so the cards are already resolved by the time this runs — this
+      // is the unhandled-rejection guard, plus the in-flight release for any id
+      // that somehow slipped through. Without the release those ids are pinned:
+      // the set is only cleared BY a result, so a skipped one would never be
+      // requested again and its card would shimmer for the life of the page.
+      missing.forEach((id) => spacesInFlight.current.delete(id));
+      // eslint-disable-next-line no-console
+      console.warn('[#07 nearby] space lookup failed for', missing, err);
     });
 
     return () => { cancelled = true; };

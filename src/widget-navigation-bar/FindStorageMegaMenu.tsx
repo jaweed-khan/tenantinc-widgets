@@ -922,8 +922,12 @@ export function FindStorageMegaMenu({
   // page.
   const mobileClose = (
     <button className="nav-mega-m-close" type="button" onClick={onClose} aria-label="Close menu">
-      {/* Outlined ring: .nav-mega is a near-black overlay. */}
-      <CloseCircleIcon outlined size={34} />
+      {/* Figma's **Mobile — 32** frame. Outlined ring: .nav-mega is a near-black
+          overlay. 32 is not just a number here — `CloseCircleIcon` branches on
+          `size <= 32` to draw the mobile export's thinner ring (stroke 2, inset
+          1) instead of the desktop frame's (stroke 3, inset 1.5), so anything
+          above 32 renders the DESKTOP mark scaled down. */}
+      <CloseCircleIcon outlined size={32} />
     </button>
   );
 
@@ -1001,8 +1005,9 @@ export function FindStorageMegaMenu({
       {/* Outside .nav-mega-inner on purpose: the Figma parks the ✕ against the
           viewport corner, past the right edge of the card. */}
       <button className="nav-mega-close" type="button" onClick={onClose} aria-label="Close menu">
-        {/* Outlined ring: .nav-mega is a near-black overlay. */}
-        <CloseCircleIcon outlined size={34} />
+        {/* Figma's **Desktop — 52** frame, the component's own default size.
+            Outlined ring: .nav-mega is a near-black overlay. */}
+        <CloseCircleIcon outlined size={52} />
       </button>
 
       <div className="nav-mega-inner">

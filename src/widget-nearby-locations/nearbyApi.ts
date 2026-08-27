@@ -217,6 +217,43 @@ export async function fetchSpacesForProperties(
 ): Promise<void> {
   if (!propertyIds.length) return;
 
+  // EVERY REQUESTED ID GETS AN ANSWER, WHATEVER HAPPENS BELOW.
+  //
+  // "Fails soft per id" was only true of the per-property fan-out's own
+  // try/catch. Between the batch and that fan-out sit `fetchSpaceGroupBinding()`
+  // and `creds()`, and a throw from either used to reject this function before a
+  // single `onResult` fired — so no card ever left `SpacesSkeleton`, and because
+  // the caller's in-flight set is only cleared BY a result, those ids were never
+  // retried either. One failure there froze the shimmer on every visible card
+  // for the life of the page.
+  //
+  // Reporting the same `{ spaces: [] }` a per-property failure gives means an
+  // unreachable API renders the card's three reserved rows — the SAME thing a
+  // facility with nothing bookable shows — instead of a permanent loader.
+  const answered = new Set<string>();
+  const report = (id: string, data: PropertySpaces): void => {
+    answered.add(id);
+    onResult(id, data);
+  };
+
+  try {
+    await fetchSpacesForPropertiesInner(propertyIds, report);
+  } finally {
+    for (const id of propertyIds) {
+      if (!answered.has(id)) report(id, { spaces: [] });
+    }
+  }
+}
+
+/**
+ * The real work. Split out so the guarantee above wraps every exit path — a
+ * `finally` around the whole body is what makes "every id gets an answer" true
+ * of a throw as well as of a clean run.
+ */
+async function fetchSpacesForPropertiesInner(
+  propertyIds: string[],
+  onResult: (propertyId: string, data: PropertySpaces) => void,
+): Promise<void> {
   const batched = await portfolioSpaces();
 
   // REPORT EVERY FACILITY THE BATCH COVERED, not just the ids asked for.

@@ -13,6 +13,7 @@ import {
   fetchPropertiesPreferCollection,
   type PropertiesSourceOptions,
 } from './propertiesSource';
+import { withTimeout, timeoutSignal, TIMEOUTS } from './withTimeout';
 
 export interface NearbyApiConfig {
   baseUrl: string;
@@ -223,9 +224,32 @@ export function formatDistance(miles: number): string {
   return `${Math.trunc(miles).toLocaleString('en-US')} Miles`;
 }
 
-/** Browser geolocation, resolving null on denial/error/timeout (never rejects). */
-export function getUserLocation(timeoutMs = 8000): Promise<{ lat: number; lng: number } | null> {
-  return new Promise((resolve) => {
+/**
+ * Browser geolocation, resolving null on denial/error/timeout (never rejects).
+ *
+ * ── THE `timeout` OPTION IS NOT ENOUGH, AND THAT WAS A HANG ─────────────────
+ * Geolocation's own `timeout` does not start counting until the permission
+ * prompt is ANSWERED — it bounds acquiring a fix, not deciding whether to allow
+ * one. So a visitor who ignores the prompt, or dismisses it without choosing,
+ * gets NEITHER callback: this promise never settled, and every caller that
+ * `Promise.all`s it (#07's card list, #05's nearby section, #08, #02's mega
+ * menu) waited forever. #07 showed skeleton cards for the life of the page, and
+ * because it depends on whether a prompt appears and what the visitor does with
+ * it, it came and went between reloads.
+ *
+ * `withTimeout` puts a WALL CLOCK over the whole ask, prompt included, and its
+ * expiry lands on the same `null` that a denial does — which every caller
+ * already handles by rendering without distances. Long enough for a visitor to
+ * read the prompt and click; short enough that one left sitting doesn't hold a
+ * widget on skeletons.
+ *
+ * A late answer is then ignored rather than applied: there is no cancelling a
+ * geolocation request, so the browser may still deliver a position after we have
+ * given up. Rendering the list unordered is the documented degradation; jumping
+ * the cards around ten seconds later would be worse.
+ */
+export function getUserLocation(timeoutMs = TIMEOUTS.geolocation): Promise<{ lat: number; lng: number } | null> {
+  const ask = new Promise<{ lat: number; lng: number } | null>((resolve) => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) return resolve(null);
     navigator.geolocation.getCurrentPosition(
       (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
@@ -233,6 +257,7 @@ export function getUserLocation(timeoutMs = 8000): Promise<{ lat: number; lng: n
       { timeout: timeoutMs, maximumAge: 5 * 60 * 1000 },
     );
   });
+  return withTimeout(ask, timeoutMs, null, 'geolocation (prompt unanswered?)');
 }
 
 // ---------------------------------------------------------------------------
@@ -246,7 +271,7 @@ export async function fetchProperties(
   // Duda's "Properties" collection first (no API key, no round trip); the keyed
   // call is the fallback. Same envelope either way — see @shared/propertiesSource.
   return fetchPropertiesPreferCollection(cfg.appId, async () => {
-    const res = await fetch(`${companyBase(cfg)}/properties?unit_type_counts=true`, { headers: headers(cfg) });
+    const res = await fetch(`${companyBase(cfg)}/properties?unit_type_counts=true`, { headers: headers(cfg), signal: timeoutSignal(TIMEOUTS.request) });
     if (!res.ok) throw new Error(`fetchProperties failed: ${res.status} ${res.statusText}`);
     return res.json();
   }, opts);
@@ -318,7 +343,7 @@ export async function fetchPropertySpaces(
 ): Promise<PropertySpaceData> {
   const base = companyBase(cfg);
   try {
-    const listRes = await fetch(`${base}/properties/${propertyId}/space-groups`, { headers: headers(cfg) });
+    const listRes = await fetch(`${base}/properties/${propertyId}/space-groups`, { headers: headers(cfg), signal: timeoutSignal(TIMEOUTS.request) });
     if (!listRes.ok) return { spaces: [] };
     const listJson = (await listRes.json()) as SpaceGroupsResponse;
     const groups = listJson?.applicationData?.[cfg.appId]?.[0]?.data?.spaceGroups ?? [];
@@ -326,7 +351,7 @@ export async function fetchPropertySpaces(
     const sg = groups.find((g) => /website/i.test(g.name ?? '')) ?? groups[0];
     if (!sg) return { spaces: [] };
 
-    const grpRes = await fetch(`${base}/properties/${propertyId}/space-groups/${sg.id}/groups`, { headers: headers(cfg) });
+    const grpRes = await fetch(`${base}/properties/${propertyId}/space-groups/${sg.id}/groups`, { headers: headers(cfg), signal: timeoutSignal(TIMEOUTS.request) });
     if (!grpRes.ok) return { spaces: [] };
     const grpJson = (await grpRes.json()) as GroupsResponse;
     const profile = grpJson?.applicationData?.[cfg.appId]?.[0]?.data?.spaceGroupProfile;
@@ -371,7 +396,7 @@ export async function fetchSpaceGroupSpaces(
 
   try {
     const query = ids.map((id) => `space_group_id=${encodeURIComponent(id)}`).join('&');
-    const res = await fetch(`${companyBase(cfg, 'v1')}/space-groups?${query}`, { headers: headers(cfg) });
+    const res = await fetch(`${companyBase(cfg, 'v1')}/space-groups?${query}`, { headers: headers(cfg), signal: timeoutSignal(TIMEOUTS.request) });
     if (!res.ok) return out;
     const json = (await res.json()) as BatchGroupsResponse;
     const profile = json?.applicationData?.[cfg.appId]?.[0]?.data?.spaceGroupProfile;

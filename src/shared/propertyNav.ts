@@ -27,6 +27,8 @@ import { readCollection, str, plainText, logSource, hasCollectionsApi } from './
 import { PROPERTIES_COLLECTION } from './propertiesSource';
 import { formatPhone } from './propertyContact';
 
+export type NavUnitType = 'storage' | 'parking';
+
 /** One facility — the third level. */
 export interface NavProperty {
   id: string;
@@ -59,6 +61,8 @@ export interface NavProperty {
   /** Coordinates for distance sorting; null when the Address has none. */
   lat: number | null;
   lng: number | null;
+  /** Unit types with current vacancy, derived from `unit_type_counts`. */
+  vacantUnitTypes: NavUnitType[];
 }
 
 /** One city — the second level. */
@@ -188,6 +192,8 @@ export interface PropertyRowLike {
   Address?: unknown;
   /** External collection ⇒ already-parsed array. */
   Phones?: unknown;
+  /** External collection ⇒ already-parsed inventory summary array. */
+  unit_type_counts?: unknown;
 }
 
 /**
@@ -283,12 +289,24 @@ export function buildLocationTree(
     }
 
     const slug = str(row.slug).replace(/^\/+|\/+$/g, '');
+    const rawCounts = asJson<unknown>(row.unit_type_counts);
+    const vacantUnitTypes = Array.isArray(rawCounts)
+      ? [...new Set(rawCounts.flatMap((entry) => {
+          if (!entry || typeof entry !== 'object') return [];
+          const count = entry as Record<string, unknown>;
+          const unitType = str(count.unit_type).toLowerCase();
+          return Number(count.vacant_count) > 0 && (unitType === 'storage' || unitType === 'parking')
+            ? [unitType as NavUnitType]
+            : [];
+        }))]
+      : [];
     city.properties.push({
       id: str(row.id),
       // Real name first — see the header note on stale slugs.
       label: str(row.name) || propertySlugLabel(parsed.property),
       href: `${base}/${slug}`,
       slug,
+      vacantUnitTypes,
       ...rowContact(row),
     });
   }

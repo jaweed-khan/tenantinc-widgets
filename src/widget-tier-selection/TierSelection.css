@@ -172,10 +172,10 @@
   margin-top: 26px;
   padding: 12px;
   background: #fff;
-  border: 2px dashed var(--color_2, #509e2f);
+  border: 2px dashed var(--color_1, #f45f30);
   border-radius: 8px;
 }
-.ts-promo-icon { color: var(--color_2, #509e2f); flex: 0 0 auto; }
+.ts-promo-icon { color: var(--color_1, #f45f30); flex: 0 0 auto; }
 .ts-promo-text {
   font-size: 14px;
   font-weight: 700;
@@ -214,24 +214,27 @@
   color: #101318;
 }
 
-/* Select button */
-.ts-select-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 50px;
-  margin-top: 19px;
-  background: var(--color_2, #F26500);
-  border: 0;
-  border-radius: 8px;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 16px;
-  font-weight: 700;
-  color: #fff;
+/* Tier CTAs use @shared/ui/Button for semantics, tokens and interaction states.
+   These modifiers retain only this layout's Figma-specific dimensions. */
+.ts-tier-cta {
+  --hb-font-size-button: 20px;
 }
-.ts-select-btn:hover { background: color-mix(in srgb, var(--color_2, #F26500) 85%, black); }
+
+.ts-tier-cta--option1 {
+  --hb-button-height: 50px;
+  --hb-font-size-button: 16px;
+  --hb-cta: var(--color_2, #F26500);
+  margin-top: 19px;
+}
+
+/* Hovering anywhere on a tier card previews the pick: its outline Select button
+   fills with the CTA colour, matching the selected state. (A selected card's
+   button is already solid, so it has no .hb-btn--outline and is unaffected.) */
+.ts-o2-card:hover .ts-tier-cta.hb-btn--outline {
+  background: var(--hb-cta);
+  color: #fff;
+  border-color: var(--hb-cta);
+}
 
 
 /* ── Comparison table ──────────────────────────────────────────────────── */
@@ -496,14 +499,12 @@
 .ts-m-promo { margin-top: 22px; }
 .ts-m-features { margin-top: 20px; padding-left: 0; gap: 24px; }
 
-.ts-m-select {
+.ts-tier-cta--option1-mobile {
+  --hb-button-height: 52px;
+  --hb-font-size-button: 20px;
+  --hb-cta: var(--color_2, #F26500);
   margin-top: 16px;
-  height: 52px;
-  font-size: 20px;
-  background: var(--color_2, #F26500);
-  border: 2px solid var(--color_2, #F45F30);
 }
-.ts-m-select:hover { background: color-mix(in srgb, var(--color_2, #F26500) 85%, black); }
 
 /* Collapsible move-in total */
 .ts-m-rates { display: flex; align-items: center; justify-content: flex-end; gap: 16px; margin-top: 16px; }
@@ -700,26 +701,6 @@
 .ts-o2-foot-bottom { display: flex; flex-direction: column; gap: 12px; }
 .ts-o2-promo-slot { min-height: 44px; }
 .ts-o2-promo { margin: 0; }
-.ts-o2-select {
-  width: 100%;
-  height: 52px;
-  border: 2px solid var(--color_2, #509e2f);
-  border-radius: 8px;
-  background: #fff;
-  color: #101318;
-  font-family: inherit;
-  font-size: 20px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.ts-o2-select:hover { background: color-mix(in srgb, var(--color_2, #509e2f) 8%, #fff); }
-.ts-o2-select--accent { background: var(--color_2, #509e2f); color: #fff; }
-.ts-o2-select--accent:hover { background: color-mix(in srgb, var(--color_2, #509e2f) 80%, black); }
-/* The Select CTA renders as an <a> (so Duda's router intercepts it in preview);
-   keep it visually identical to the button variants. */
-a.ts-select-btn, a.ts-o2-select { text-decoration: none; }
-a.ts-o2-select { display: flex; align-items: center; justify-content: center; }
-
 .ts-o2-admin {
   display: flex;
   align-items: center;
@@ -795,7 +776,7 @@ a.ts-o2-select { display: flex; align-items: center; justify-content: center; }
 .ts-o2m-card--popular { padding-top: 34px; }
 .ts-o2m-features { margin-top: 16px; }
 .ts-o2m-promo { margin-top: 16px; }
-.ts-o2m .ts-o2-select { height: 46px; margin-top: 16px; }
+.ts-tier-cta--cards-mobile { --hb-button-height: 46px; margin-top: 16px; }
 
 /* ═══ Option 3 — pricing cards fused with a comparison table ════════════════ */
 .ts-o3 { max-width: 1320px; margin: 0 auto; }
@@ -875,8 +856,15 @@ a.ts-o2-select { display: flex; align-items: center; justify-content: center; }
 /* Sold-out card: greyed skeleton bars where features would be (Figma "reservation closed") */
 .ts-o2-features--soldout { list-style: none; margin: 24px 0 0; padding: 0; align-self: stretch; width: 100%; display: flex; flex-direction: column; gap: 14px; }
 .ts-o2-skel { width: 100%; height: 12px; border-radius: 6px; background: #eef0f2; }
-.ts-o2-select--soldout { color: #c4cdd5; border-color: #c4cdd5; background: #fff; cursor: not-allowed; }
-.ts-o2-select--soldout:hover { background: #fff; }
+.ts-tier-cta--soldout,
+.ts-tier-cta--soldout:disabled,
+.ts-tier-cta--soldout:disabled:hover {
+  opacity: 1;
+  color: #c4cdd5;
+  border-color: #c4cdd5;
+  background: #fff;
+  cursor: not-allowed;
+}
 .ts-o3-col--popular .ts-o3-card { border-top-left-radius: 14px; border-top-right-radius: 14px; }
 .ts-o3-col--popular .ts-o3-vrow--last { border-bottom-left-radius: 14px; border-bottom-right-radius: 14px; }
 .ts-o3-badge { z-index: 2; }

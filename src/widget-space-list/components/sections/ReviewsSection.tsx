@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { useSwipe } from '@shared/useSwipe';
+import { useCarousel, usePrefersReducedMotion } from '@shared/useCarousel';
+import { CarouselDots } from '@shared/CarouselDots';
 import { Shimmer } from '@shared/Shimmer';
 import { fetchAllReviewSources, type ReviewSourceData } from '@shared/reviewsCollections';
 import { CarouselChevron } from '../chevron';
@@ -144,7 +145,6 @@ function Stars({
 
 export function ReviewsSection() {
   const [platform, setPlatform] = useState<Platform>('google');
-  const [page, setPage] = useState(0);
 
   // Google + Yelp from their Duda collections — both the review list AND the
   // summary score/count. ALL_REVIEWS + PLATFORM_META stay as the fallback (dev
@@ -180,16 +180,18 @@ export function ReviewsSection() {
         id: i + 1, platform, author: r.author, rating: r.rating, text: r.text, timeAgo: r.timeAgo,
       }))
     : ALL_REVIEWS.filter((r) => r.platform === platform);
-  const currentReview = reviews[page] ?? reviews[0];
   const total = reviews.length;
-  const swipe = useSwipe({
-    onSwipeLeft: () => setPage((p) => Math.min(total - 1, p + 1)),
-    onSwipeRight: () => setPage((p) => Math.max(0, p - 1)),
-  });
+  // One review at a time, dragged with the finger — the same shared hook the
+  // blog listing and the other sidebar sections use, so the feel and the 6-dot
+  // cap are identical everywhere. Index clamping lives in the hook.
+  const carousel = useCarousel({ count: total, perView: 1, draggable: true });
+  const reduceMotion = usePrefersReducedMotion();
 
   function handlePlatform(p: Platform) {
     setPlatform(p);
-    setPage(0);
+    // Each platform has its own review list, so a switch has to rewind — index 3
+    // of Google is meaningless once the Yelp list is showing.
+    carousel.goTo(0);
   }
 
   // The score/count summary is live too, so the whole block waits rather than
@@ -242,17 +244,42 @@ export function ReviewsSection() {
       </div>
 
       {/* Review card — swipeable: the arrows are hidden on mobile. */}
-      {currentReview && (
-        <div className="sl-rv2-card" {...swipe.handlers}>
-          <div className="sl-rv2-card-header">
-            <UserCircleIcon />
-            <div className="sl-rv2-author-info">
-              <p className="sl-rv2-author">{currentReview.author}</p>
-              <Stars rating={currentReview.rating} size={14} color={meta.starColor} badged={platform === 'yelp'} />
-            </div>
+      {total > 0 && (
+        /* Every review renders once and one transform slides the row; the window
+           clips the rest. The item must stay exactly one window wide or the
+           pitch stops matching the step and the cards drift. */
+        <div className="sl-rv2-track-window" {...carousel.handlers}>
+          <div
+            className="sl-rv2-track"
+            style={{
+              transform: `translateX(calc(${(carousel.offsetPct / 100).toFixed(6)} * 100%))`,
+              transition:
+                reduceMotion || carousel.dragging
+                  ? 'none'
+                  : 'transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1)',
+            }}
+          >
+            {reviews.map((r, i) => (
+              <div
+                className="sl-rv2-track-item"
+                key={r.id ?? i}
+                {...(i === carousel.index ? {} : { inert: '' as unknown as boolean })}
+                aria-hidden={i === carousel.index ? undefined : true}
+              >
+                <div className="sl-rv2-card">
+                  <div className="sl-rv2-card-header">
+                    <UserCircleIcon />
+                    <div className="sl-rv2-author-info">
+                      <p className="sl-rv2-author">{r.author}</p>
+                      <Stars rating={r.rating} size={14} color={meta.starColor} badged={platform === 'yelp'} />
+                    </div>
+                  </div>
+                  <p className="sl-rv2-text">{r.text}</p>
+                  <p className="sl-rv2-time">{r.timeAgo}</p>
+                </div>
+              </div>
+            ))}
           </div>
-          <p className="sl-rv2-text">{currentReview.text}</p>
-          <p className="sl-rv2-time">{currentReview.timeAgo}</p>
         </div>
       )}
 
@@ -261,22 +288,26 @@ export function ReviewsSection() {
         <div className="sl-rv2-pagination">
           <button
             className="sl-rv2-arrow"
-            onClick={() => setPage((p) => Math.max(0, p - 1))}
-            disabled={page === 0}
+            onClick={carousel.prev}
+            disabled={!carousel.canPrev}
+            aria-label="Previous review"
           >
             <CarouselChevron dir="left" />
           </button>
-          {reviews.map((_, i) => (
-            <button
-              key={i}
-              className={`sl-rv2-dot${i === page ? ' active' : ''}`}
-              onClick={() => setPage(i)}
-            />
-          ))}
+          {/* Capped at 6 with the window sliding — a property with 40 Google
+              reviews must not print 40 dots into a sidebar this narrow. */}
+          <CarouselDots
+            count={total}
+            active={carousel.index}
+            onPick={carousel.goTo}
+            dotClass="sl-rv2-dot"
+            label="Go to review {n}"
+          />
           <button
             className="sl-rv2-arrow"
-            onClick={() => setPage((p) => Math.min(total - 1, p + 1))}
-            disabled={page === total - 1}
+            onClick={carousel.next}
+            disabled={!carousel.canNext}
+            aria-label="Next review"
           >
             <CarouselChevron dir="right" />
           </button>

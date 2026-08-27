@@ -243,6 +243,16 @@
   line-height: 16px;
 }
 
+/* The promo bar's height with nothing drawn — see `ReservedSpaceRow` in
+   NearbyLocations.tsx for why every card reserves it. `visibility: hidden`
+   rather than `opacity: 0`: it still takes its space, but it is out of the
+   accessibility tree and cannot be clicked or tabbed into. */
+.nl-promo--reserved,
+.nl-space-row--reserved,
+.nl-space-divider--reserved {
+  visibility: hidden;
+}
+
 /* ── Spaces list ────────────────────────────────────────────────────────── */
 
 .nl-spaces {
@@ -289,12 +299,6 @@
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.nl-price-tag {
-  display: inline-flex;
-  color: var(--color_1, #509e2f);
-  flex-shrink: 0;
 }
 
 .nl-price-strike {
@@ -396,6 +400,20 @@
   margin-top: auto;
 }
 
+/* The real card's footer is an <a> covering the whole row (the skeleton's is a
+   div, hence the element selector). `text-decoration: none` is the load-bearing
+   declaration: an underline set on an ancestor CANNOT be removed by a
+   descendant, so without it the admin-fee line is underlined too and only
+   `.nl-see-all`'s own underline is intended. `color: inherit` for the same
+   reason in reverse — the fee keeps its own black, not the link colour.
+   Cursor is restated for the hrefless case (no slug on the row): browsers drop
+   the pointer there, and the footer must read the same from card to card. */
+a.nl-card-footer {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+
 .nl-admin-fee {
   font-size: 12px;
   font-weight: 600;
@@ -414,13 +432,10 @@
   cursor: pointer;
 }
 
-/* An <a> WITHOUT href when the row carries no slug — there is nowhere to point,
-   but the footer must look identical from card to card, so it keeps the full
-   `.nl-see-all` treatment (CTA colour, underline) rather than greying out.
-   Browsers drop the pointer cursor on a hrefless anchor, so restate it. */
-.nl-see-all:not([href]) {
-  cursor: pointer;
-}
+/* `.nl-see-all` is a SPAN inside the footer anchor, so it never carries an
+   href of its own — the pointer cursor comes from `a.nl-card-footer` above,
+   which also covers the hrefless case (a row with no slug still looks
+   identical, rather than greying out). */
 
 /* ── Pagination ─────────────────────────────────────────────────────────── */
 
@@ -574,6 +589,22 @@
 }
 
 @media (max-width: 768px) {
+  /* DUDA'S OWN WRAPPER, not ours — `#widget_srf` is the element Duda renders the
+     external app into, and on mobile its layout gives it a limited width plus
+     side padding, which squeezes the whole section into a narrow column inside
+     the band. The widget cannot restyle its own container from the inside any
+     other way: the id beats every class selector here and the declarations are
+     inline-level in Duda's mobile CSS, hence `!important`.
+
+     Scoped to the mobile breakpoint on purpose — the desktop width is Duda's to
+     set, and the grid is drawn for the 1314px 3-up band it gives us. */
+  #widget_srf {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
   .nl-desktop {
     display: none;
   }

@@ -31,6 +31,8 @@
 // which falls back to demo posts).
 // ===========================================================================
 
+import { withTimeout, TIMEOUTS } from './withTimeout';
+
 /** Minimal shape of the bits of the Collections JS API we touch. The real API
  *  also exposes .where()/.orderBy()/limits, which we don't rely on. */
 interface DmCollectionQuery {
@@ -79,18 +81,104 @@ function flattenRow(row: CollectionRow): CollectionRow {
   return { ...nested, __rowId: row.id };
 }
 
+// ── Waiting for the API, rather than checking once ──────────────────────────
+
+/** How long to keep looking for `dmAPI` before concluding it isn't coming. */
+const API_WAIT_MS = 1500;
+const API_POLL_MS = 100;
+
+let apiWait: Promise<boolean> | null = null;
+
+/**
+ * True once `dmAPI.loadCollectionsAPI` exists, false after ~1.5s of it not.
+ *
+ * ── WHY POLL, WHEN `hasCollectionsApi()` ANSWERS IMMEDIATELY ────────────────
+ * `dmAPI` is injected by the published page's own scripts, and an external-app
+ * widget can mount before they have run. A single synchronous check is therefore
+ * a RACE, and losing it is silent and expensive: `readCollection` returns `[]`,
+ * so #07 decides `PropertiesInternal` is empty, falls through `Properties` to the
+ * keyed REST call — which on this site is a DIFFERENT company (see CLAUDE.md) —
+ * and renders another company's facilities, or none. Reload and the timing
+ * changes, which is exactly the "sometimes it works" report.
+ *
+ * `@shared/sitePages` already reached this conclusion and polls for 5s; this is
+ * the same fix for the collections surface.
+ *
+ * SHORT on purpose, where sitePages can afford 5s. The footer paints its fallback
+ * immediately and swaps later, so waiting costs it nothing; a collection read
+ * blocks its caller's first paint, and in the Duda editor and the dev harness
+ * `dmAPI` is never coming — so every read there pays this in full before falling
+ * back to REST. 1.5s is the compromise: comfortably longer than a script-ordering
+ * race, short enough to be unremarkable in the editor.
+ *
+ * Cached page-wide, so the several widgets on a page share ONE wait rather than
+ * each polling their own.
+ *
+ * `hasCollectionsApi()` is deliberately NOT changed. It is the SYNCHRONOUS gate
+ * several widgets use to decide whether to show demo data (#02's location tree
+ * and star ratings, #13's demo locations), and those need an answer during
+ * render. Making it async, or making it wait, would change what the editor shows
+ * in a way this fix has no business touching.
+ */
+function waitForCollectionsApi(): Promise<boolean> {
+  if (getDmAPI()?.loadCollectionsAPI) return Promise.resolve(true);
+  if (apiWait) return apiWait;
+  apiWait = new Promise<boolean>((resolve) => {
+    const deadline = Date.now() + API_WAIT_MS;
+    const tick = () => {
+      if (getDmAPI()?.loadCollectionsAPI) return resolve(true);
+      if (Date.now() >= deadline) {
+        logSource('shared', 'collections API', false, `no dmAPI after ${API_WAIT_MS}ms — Duda editor, dev harness, or an older site`);
+        return resolve(false);
+      }
+      setTimeout(tick, API_POLL_MS);
+    };
+    tick();
+  });
+  return apiWait;
+}
+
 /**
  * Read every row of a collection by name (case-sensitive — it's the lookup key).
  * Returns [] on ANY failure: not in Duda, no dmAPI, collection absent, network
- * error. Never throws.
+ * error, or the read not answering at all. Never throws.
+ *
+ * ── THE TIMEOUT IS NOT BELT-AND-BRACES ──────────────────────────────────────
+ * "Never throws" was already true; "always settles" was not, and that is the
+ * failure that hurts. `loadCollectionsAPI()` and `.get()` are promises handed
+ * over by the page's own scripts, and nothing here bounded them — so a read
+ * that never answered left this promise pending for the life of the page.
+ *
+ * Which would be one slow widget, except that `internalProperties.ts` and
+ * `propertyImages.ts` cache the PROMISE rather than the result, deliberately, so
+ * every widget on the page shares one request. A single hung read is therefore
+ * joined by every later caller and never resolves for any of them: #07 sits on
+ * skeleton cards, #13's locations panel never appears, #03's hero photo never
+ * arrives. Timing-dependent, so it comes and goes between reloads.
+ *
+ * Expiry lands on the same `[]` every other failure here does, so it introduces
+ * no path a caller doesn't already handle — it just means a stall degrades like
+ * a missing collection instead of hanging.
  */
 export async function readCollection(collectionName: string): Promise<CollectionRow[]> {
   try {
+    // Waits rather than checking once — see waitForCollectionsApi.
+    if (!(await waitForCollectionsApi())) return [];
     const dmAPI = getDmAPI();
     if (!dmAPI?.loadCollectionsAPI) return [];
-    const collections = await dmAPI.loadCollectionsAPI();
-    const res = await collections.data(collectionName).get();
-    return extractRows(res).map(flattenRow);
+    // Bounded as ONE operation, not two: the budget is for answering the read,
+    // and splitting it would let a slow `loadCollectionsAPI()` spend the whole
+    // allowance and still leave `.get()` its own.
+    return await withTimeout(
+      (async () => {
+        const collections = await dmAPI.loadCollectionsAPI!();
+        const res = await collections.data(collectionName).get();
+        return extractRows(res).map(flattenRow);
+      })(),
+      TIMEOUTS.collection,
+      [] as CollectionRow[],
+      `dmAPI read of "${collectionName}"`,
+    );
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn(`[dudaCollections] read of "${collectionName}" failed`, err);

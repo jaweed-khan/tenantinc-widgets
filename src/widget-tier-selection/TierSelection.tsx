@@ -8,6 +8,7 @@ import {
 } from './api';
 import { Shimmer } from '@shared/Shimmer';
 import { MoneyBreakdown, SummaryRail, formatPrice, CloseCircleIcon } from '@shared/ui';
+import { Button } from '@shared/ui/Button';
 import { resolvePropertyId } from '@shared/propertyBinding';
 import { resolveCompanyIdFromSources } from '@shared/companySource';
 import {
@@ -84,6 +85,61 @@ const EMPTY_DATA: TierData = {
 
 const TierDataContext = React.createContext<TierData>(EMPTY_DATA);
 const useTierData = () => React.useContext(TierDataContext);
+
+/**
+ * Tier CTA adapter around the shared UI Button. Transaction/link semantics,
+ * disabled handling and interaction states stay centralized in @shared/ui;
+ * the class variants below preserve this widget's Figma-specific dimensions.
+ */
+function TierSelectCta({
+  tierKey,
+  selected = true,
+  soldOut = false,
+  variant = 'cards',
+  stopPropagation = false,
+}: {
+  tierKey: TierKey;
+  selected?: boolean;
+  soldOut?: boolean;
+  variant?: 'option1' | 'option1-mobile' | 'cards' | 'cards-mobile';
+  stopPropagation?: boolean;
+}) {
+  const { rentHref, onSelectClick, ctaLabel } = useTierData();
+  const href = soldOut ? undefined : rentHref?.(tierKey);
+  const className = [
+    'ts-tier-cta',
+    `ts-tier-cta--${variant}`,
+    soldOut ? 'ts-tier-cta--soldout' : '',
+  ].filter(Boolean).join(' ');
+  const content = ctaLabel ?? 'Select';
+  const handleClick = (e: React.MouseEvent) => {
+    if (stopPropagation) e.stopPropagation();
+    onSelectClick?.(tierKey)(e);
+  };
+
+  return href ? (
+    <Button
+      tone="cta"
+      fill={selected ? 'solid' : 'outline'}
+      block
+      href={href}
+      className={className}
+      onClick={handleClick}
+    >
+      {content}
+    </Button>
+  ) : (
+    <Button
+      tone="cta"
+      fill={selected && !soldOut ? 'solid' : 'outline'}
+      block
+      disabled
+      className={className}
+    >
+      {content}
+    </Button>
+  );
+}
 
 const TAGLINES: Record<TierKey, string> = {
   good: 'Lowest Rate', better: 'Best Value', best: 'Most Features',
@@ -1165,7 +1221,7 @@ interface LayoutProps {
 }
 
 function DesktopLayout({ tier, selected, setSelected, heading, subheading, urgency, adminFeeText, promo, chromeless }: LayoutProps) {
-  const { tiers, rows, sizeImage, sizeAlt, size, live, property, rentHref, onSelectClick, ctaLabel } = useTierData();
+  const { tiers, rows, sizeImage, sizeAlt, size, live, property } = useTierData();
   const displaySize = size ? size.replace(/'/g, '\u2019') : '5\u2019 x 5\u2019';
   const cardPromo = live ? tier.promo : 'First Full Month FREE';
   return (
@@ -1244,9 +1300,7 @@ function DesktopLayout({ tier, selected, setSelected, heading, subheading, urgen
               })()}
             </div>
 
-            {rentHref?.(selected)
-              ? <a className="ts-select-btn" href={rentHref(selected)} onClick={onSelectClick?.(selected)}>{ctaLabel ?? 'Select'}</a>
-              : <button type="button" className="ts-select-btn" disabled>{ctaLabel ?? 'Select'}</button>}
+            <TierSelectCta tierKey={selected} variant="option1" />
           </div>
         </div>
 
@@ -1316,7 +1370,7 @@ function MobileLayout({
   tier: Tier; selected: TierKey; setSelected: (k: TierKey) => void;
   heading: string; urgency: string; adminFeeText?: string; promo: string; chromeless?: boolean;
 }) {
-  const { tiers, rows, live, rentHref, onSelectClick, ctaLabel } = useTierData();
+  const { tiers, rows, live } = useTierData();
   const [open, setOpen] = useState(false);
   // Mobile has no room for sold-out placeholders — show real tiers only.
   const visibleTiers = tiers.filter((t) => !t.soldOut);
@@ -1377,9 +1431,7 @@ function MobileLayout({
         })()}
       </div>
 
-      {rentHref?.(selected)
-        ? <a className="ts-select-btn ts-m-select" href={rentHref(selected)} onClick={onSelectClick?.(selected)}>{ctaLabel ?? 'Select'}</a>
-        : <button type="button" className="ts-select-btn ts-m-select" disabled>{ctaLabel ?? 'Select'}</button>}
+      <TierSelectCta tierKey={selected} variant="option1-mobile" />
 
       {tier.promoRate != null && (
         <div className="ts-m-rates">
@@ -1496,7 +1548,7 @@ function Option2Layout({ heading, subheading, urgency, adminFeeText, chromeless 
 }
 
 function O2Card({ card }: { card: O2Tier }) {
-  const { rentHref, onSelectClick, selected, setSelected, featuredTier, ctaLabel } = useTierData();
+  const { selected, setSelected, featuredTier } = useTierData();
   const isSelected = selected === card.key;
   const isFeatured = featuredTier === card.key;
   if (card.soldOut) {
@@ -1519,7 +1571,7 @@ function O2Card({ card }: { card: O2Tier }) {
           </div>
           <div className="ts-o2-foot-bottom">
             <div className="ts-o2-promo-slot" />
-            <button type="button" className="ts-o2-select ts-o2-select--soldout" disabled>{ctaLabel ?? 'Select'}</button>
+            <TierSelectCta tierKey={card.key} selected={false} soldOut />
           </div>
         </div>
       </div>
@@ -1582,24 +1634,7 @@ function O2Card({ card }: { card: O2Tier }) {
               </div>
             </div>
           )}
-          {rentHref?.(card.key) ? (
-            <a
-              className={`ts-o2-select${isSelected ? ' ts-o2-select--accent' : ''}`}
-              href={rentHref(card.key)}
-              onClick={(e) => {
-                // The card itself selects the tier on click — Select must not
-                // bubble into that.
-                e.stopPropagation();
-                onSelectClick?.(card.key)(e);
-              }}
-            >
-              {ctaLabel ?? 'Select'}
-            </a>
-          ) : (
-            <button type="button" className={`ts-o2-select${isSelected ? ' ts-o2-select--accent' : ''}`} disabled>
-              {ctaLabel ?? 'Select'}
-            </button>
-          )}
+          <TierSelectCta tierKey={card.key} selected={isSelected} stopPropagation />
         </div>
       </div>
     </div>
@@ -1691,7 +1726,7 @@ function O2MHead({ card }: { card: O2Tier }) {
 }
 
 function O2MExpanded({ card }: { card: O2Tier }) {
-  const { ctaLabel, rentHref, onSelectClick, featuredTier } = useTierData();
+  const { featuredTier } = useTierData();
   const isFeatured = featuredTier === card.key;
   return (
     <div className={`ts-o2m-card${isFeatured ? ' ts-o2m-card--popular' : ''}`}>
@@ -1715,15 +1750,7 @@ function O2MExpanded({ card }: { card: O2Tier }) {
           <span className="ts-promo-text">{card.promo}</span>
         </div>
       )}
-      {rentHref?.(card.key) ? (
-        <a className="ts-o2-select ts-o2-select--accent" href={rentHref(card.key)} onClick={onSelectClick?.(card.key)}>
-          {ctaLabel ?? 'Select'}
-        </a>
-      ) : (
-        <button type="button" className="ts-o2-select ts-o2-select--accent" disabled>
-          {ctaLabel ?? 'Select'}
-        </button>
-      )}
+      <TierSelectCta tierKey={card.key} variant="cards-mobile" />
     </div>
   );
 }
@@ -1784,7 +1811,7 @@ function Option3Layout({ heading, subheading, urgency, adminFeeText, chromeless 
 }
 
 function O3Column({ card }: { card: O3Tier }) {
-  const { rows3, rentHref, onSelectClick, selected, setSelected, featuredTier, ctaLabel } = useTierData();
+  const { rows3, selected, setSelected, featuredTier } = useTierData();
   const isSelected = selected === card.key;
   const isFeatured = featuredTier === card.key;
   return (
@@ -1833,26 +1860,12 @@ function O3Column({ card }: { card: O3Tier }) {
                 </div>
               )}
             </div>
-            {card.soldOut ? (
-              <button type="button" className="ts-o2-select ts-o2-select--soldout" disabled>{ctaLabel ?? 'Select'}</button>
-            ) : rentHref?.(card.key) ? (
-              <a
-                className={`ts-o2-select${isSelected ? ' ts-o2-select--accent' : ''}`}
-                href={rentHref(card.key)}
-                onClick={(e) => {
-                  // The card behind this is itself clickable (it selects the
-                  // tier), so the Select must not bubble into it.
-                  e.stopPropagation();
-                  onSelectClick?.(card.key)(e);
-                }}
-              >
-                {ctaLabel ?? 'Select'}
-              </a>
-            ) : (
-              <button type="button" className={`ts-o2-select${isSelected ? ' ts-o2-select--accent' : ''}`} disabled>
-                {ctaLabel ?? 'Select'}
-              </button>
-            )}
+            <TierSelectCta
+              tierKey={card.key}
+              selected={isSelected}
+              soldOut={card.soldOut}
+              stopPropagation
+            />
           </div>
         </div>
       </div>

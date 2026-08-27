@@ -73,15 +73,51 @@
   /* Top padding clears the close ✕, which sits in the popup's own top-right
      corner. Without it the ✕ lands on the "See all cities" link at the widths
      where the card fills the viewport (roughly 1024–1394px, where the card is
-     wider than the ✕'s 40px inset). 80px = the ✕'s 40px top + its 30px height +
-     the 10px of breathing room it has always had, so this MUST be re-derived
-     whenever .nav-mega-close moves. */
-  padding: 80px 24px 32px;
-  /* Anything the columns can't shrink into scrolls inside the popup, never the
-     page behind it. */
-  overflow-y: auto;
+     wider than the ✕'s 40px inset). 102px = the ✕'s 40px top + its 52px height
+     + the 10px of breathing room it has always had, so this MUST be re-derived
+     whenever .nav-mega-close changes size or moves. */
+  padding: 102px 24px 32px;
+
+  /* ── THIS BOX NEVER SCROLLS ──────────────────────────────────────────────
+     It used to be `overflow-y: auto`, which was the only reason the popup grew
+     a scrollbar at all — and that scrollbar sat at the right edge of the 1314px
+     CARD, not the viewport, so between roughly 1354 and 1400px wide it ran
+     straight through the ✕ parked at `right: 40px`. A full-screen popup should
+     not have a page-level scrollbar in the first place.
+
+     So the popup is a flex column that hands its height to whichever panel is
+     showing, and EVERY panel owns its own scrollport (see below). Overflow is
+     therefore always resolved one level in — per column on desktop, per page on
+     mobile — and nothing ever reaches this box to scroll.
+
+     `overflow: hidden` is the backstop, not the mechanism: if a panel below ever
+     stops carrying a scroller, its overflow becomes UNREACHABLE rather than
+     scrollable. Every branch of the render is covered today —
+     .nav-mega-panels (columns), .nav-mega-all (.nav-mega-all-scroll),
+     .nav-mega-small, and mobile's .nav-mega-m (.nav-mega-m-page /
+     .nav-mega-m-list) — and a new one must bring its own. */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   overscroll-behavior: contain;
 }
+
+/* Every panel that can be .nav-mega-inner's child: shrink to the popup rather
+   than overflowing it. `min-height: 0` is the whole trick — a flex item's
+   default `min-height: auto` is its CONTENT height, so without this they refuse
+   to shrink and the overflow lands back on a box that no longer scrolls.
+
+   They keep `flex-shrink: 1` / `flex-basis: auto` (the default), so a panel
+   SHORTER than the popup stays its own height and is not stretched. That is what
+   keeps the audit's "Dividing Lines Match Length on Column Content" true: with
+   room to spare the grid row is still as tall as its tallest column. */
+.nav-mega-panels,
+.nav-mega-all,
+.nav-mega-small,
+.nav-mega-m {
+  min-height: 0;
+}
+
 
 /* Parked 40px in from the viewport's top-right corner. It used to track the
    CARD's right edge (`max(24px, calc(50% - 731px))`), which put it in a
@@ -93,11 +129,31 @@
   position: absolute;
   top: 40px;
   right: 40px;
+  /* ── WITHOUT THIS ONLY PART OF THE ✕ IS CLICKABLE ─────────────────────────
+     This button and `.nav-mega-inner` are siblings, both POSITIONED, and both
+     were `z-index: auto` — so they painted in DOM order and the inner, which
+     comes second, sat on top. It is `height: 100%` and `max-width: 1314px` with
+     102px of top padding, i.e. a transparent box directly over the ✕, and it
+     swallowed every pointer event that landed within the card.
+
+     The pixels that still worked were the ones sticking out past the card's
+     right edge: the mark spans 40–92px in from the viewport's right, the card's
+     side gap is `(100vw - 1314px) / 2`, so at 1440px only 40–63px responded —
+     23 of its 52. It reads as a dead button with a live sliver, and it gets
+     worse the narrower the window, because the gap shrinks to nothing.
+
+     Above `.nav-mega-dd`'s 5 as well (the Type/Size dropdown). Those can't reach
+     the ✕ today — the inner's 102px top padding keeps them below it — but the
+     ✕ is the popup's escape hatch and nothing inside the card should ever be
+     able to cover it again. */
+  z-index: 10;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  /* Figma's "Desktop — 52" close frame. The box has to hold the mark, or the
+     flex centring clips it. */
+  width: 52px;
+  height: 52px;
   padding: 0;
   border: none;
   background: none;
@@ -117,22 +173,38 @@
    `!important` typography above: it only ever shows on a themed page, never in
    the dev harness.
 
-   The two marks are deliberately DIFFERENT sizes now: the desktop overlay ✕ is
-   30, the mobile in-header one stays at the 34 the audit asked for ("Make the X
-   bigger according to design") — it sits in a header row beside a heading
-   rather than alone in a corner.
+   The two marks are deliberately DIFFERENT sizes, and both are now one of the
+   TWO SIZES FIGMA ACTUALLY SHIPS the close component in — "Desktop — 52" for
+   the overlay ✕ that sits alone in the viewport's corner, "Mobile — 32" for the
+   in-header one beside a heading. They used to be 30 and 34, neither of which is
+   a frame: `CloseCircleIcon` branches on `size <= 32` to draw the mobile
+   export's thinner ring (stroke 2, inset 1) rather than the desktop's (stroke 3,
+   inset 1.5), so at 34 even the MOBILE ✕ was rendering the desktop mark scaled
+   down. Keep these two numbers in step with the `size` props in
+   FindStorageMegaMenu.tsx.
 
    `flex-shrink: 0` for the mobile one, whose header row would otherwise be
    allowed to squeeze it. */
+/* `pointer-events: none` so the BUTTON is the hit target for its whole box, not
+   the glyph. `CloseCircleIcon outlined` is a stroked ring over `fill="none"`, so
+   hit-testing the artwork alone would only catch the 3px ring and the X strokes
+   — the ring's interior paints nothing. Browsers do fall the event through to
+   the <svg> and on to the button, but stating it here means the 52×52 target is
+   the button's box by construction rather than by that fallback. */
+.nav-mega-close svg,
+.nav-mega-m-close svg {
+  pointer-events: none;
+}
+
 .nav-mega-close svg {
-  width: 30px;
-  height: 30px;
+  width: 52px;
+  height: 52px;
   flex-shrink: 0;
 }
 
 .nav-mega-m-close svg {
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   flex-shrink: 0;
 }
 
@@ -154,20 +226,53 @@
   grid-template-columns: minmax(0, 440fr) minmax(0, 882fr);
 }
 
+/* EACH COLUMN SCROLLS ITSELF. With .nav-mega-inner no longer scrolling, this is
+   where a too-tall panel is absorbed — and per column rather than for the whole
+   card, so scrolling the search column can't drag the state list away with it.
+
+   In practice only the SEARCH column ever engages: the states and cities lists
+   below are capped at `52vh`, which scales with the viewport and so always fits
+   the room the popup has, whereas column one (two fields, the search row, a rule
+   and three facility rows each with a rating line) runs ~680px and overflows a
+   laptop. That was the scrollbar being reported.
+
+   `min-height: 0` so the grid item can shrink below its content height —
+   `align-items: stretch` on .nav-mega-panels then gives every column the row's
+   height to scroll within. `overflow-x: hidden` because setting `overflow-y`
+   makes CSS compute the x axis to `auto` too, and the states list bleeds 12px
+   left for the selected pill. */
 .nav-mega-col {
   display: flex;
   flex-direction: column;
   gap: 16px;
   min-width: 0;
+  min-height: 0;
   padding: 0 32px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* THE COLUMN SCROLLS; ITS CONTENTS DO NOT SHRINK. Without this, flex resolves a
+   too-tall column by squeezing the children instead — and the states/cities
+   lists are scroll containers, whose automatic minimum size is 0, so they would
+   collapse into ~100px portholes and the column would never scroll at all. Same
+   trap the mobile panel documents for its own single scrollport. Natural heights
+   plus a scrolling parent is the behaviour that was asked for. */
+.nav-mega-col > * {
+  flex-shrink: 0;
 }
 
 /* Hairlines between the columns.
    AUDIT frame title: "Dividing Lines Match Length on Column Content". They do:
-   the grid row is as tall as the TALLEST column's content (nothing here has a
-   fixed height, and `.nav-mega-panels` sizes to its content rather than filling
-   the popup), and the reference frame draws both lines that same full length
-   rather than clipping each to its own neighbour. */
+   the grid row is as tall as the TALLEST column's content, and the reference
+   frame draws both lines that same full length rather than clipping each to its
+   own neighbour.
+
+   Still true now that .nav-mega-panels is a flex item: it keeps the default
+   `flex-basis: auto`, so with room to spare it is its CONTENT height and the
+   lines stop where the content does. It only shrinks — and the lines only reach
+   the popup's full height — once the content would have overflowed, which is
+   exactly when the columns start scrolling. */
 .nav-mega-col--search,
 .nav-mega-col--states {
   border-right: 1px solid var(--nav-mega-rule);
@@ -190,6 +295,17 @@
   width: 100%;
   max-width: 798px;
   margin: 0 auto;
+  /* Its own scrollport: this frame is one centred block with no columns to
+     distribute overflow into, and .nav-mega-inner no longer scrolls for it. */
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Cards and the field below them keep their drawn heights; the block scrolls.
+   Same reasoning as `.nav-mega-col > *`. */
+.nav-mega-small > * {
+  flex-shrink: 0;
 }
 
 /* Three across in the frame; `auto-fit` so one or two facilities centre instead
@@ -292,25 +408,42 @@
   font-weight: 400 !important;
 }
 
-/* Shared scroll behaviour for the states / cities lists. The scrollbar is styled
-   for the dark panel — the default light one is nearly invisible on #111. */
+/* Shared scroll behaviour for the states / cities lists, mobile's pages, and
+   now the desktop columns and the map frame. The scrollbar is styled for the
+   dark panel — the default light one is nearly invisible on #111.
+
+   The look is on a comma list rather than `.nav-mega-scroll` alone because the
+   columns are scrollports by their own rule (they are not tagged in the JSX),
+   and an unstyled native scrollbar appearing on only some of the popup's boxes
+   is worse than none. */
 .nav-mega-scroll {
   overflow-y: auto;
+}
+
+.nav-mega-scroll,
+.nav-mega-col,
+.nav-mega-small {
   overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.45) transparent;
 }
 
-.nav-mega-scroll::-webkit-scrollbar {
+.nav-mega-scroll::-webkit-scrollbar,
+.nav-mega-col::-webkit-scrollbar,
+.nav-mega-small::-webkit-scrollbar {
   width: 6px;
 }
 
-.nav-mega-scroll::-webkit-scrollbar-thumb {
+.nav-mega-scroll::-webkit-scrollbar-thumb,
+.nav-mega-col::-webkit-scrollbar-thumb,
+.nav-mega-small::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.45);
   border-radius: 3px;
 }
 
-.nav-mega-scroll::-webkit-scrollbar-track {
+.nav-mega-scroll::-webkit-scrollbar-track,
+.nav-mega-col::-webkit-scrollbar-track,
+.nav-mega-small::-webkit-scrollbar-track {
   background: transparent;
 }
 
@@ -873,10 +1006,10 @@
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  /* 34×34 like the desktop one — the box has to hold the mark, or the flex
-     centring clips it. */
-  width: 34px;
-  height: 34px;
+  /* Figma's "Mobile — 32" close frame — the box has to hold the mark, or the
+     flex centring clips it. The desktop overlay ✕ is the 52 frame instead. */
+  width: 32px;
+  height: 32px;
   padding: 0;
   border: none;
   background: none;

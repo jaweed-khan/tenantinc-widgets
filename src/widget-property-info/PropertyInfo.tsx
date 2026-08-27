@@ -76,9 +76,28 @@ type Props = PropertyInfoProps & BoundPropertyProps;
  * column beside the gallery + map) so the swap to real content barely shifts
  * layout; collapses to a single column on mobile via the CSS.
  */
-function PropertySkeleton() {
+function PropertySkeleton({ displayMode }: { displayMode: 'full' | 'hero' }) {
   return (
     <>
+      {/* Wrapped in the SAME .pi-desktop / .pi-mobile switch the real layouts
+          use, so the placeholder cannot show a composition the content will
+          not. Mobile is not a narrower desktop here: it is a full-bleed hero,
+          a row of five circles and a centred hours block — see `mobile` in
+          PropertyInfo. The desktop skeleton was being drawn at every width,
+          which is why a phone got two big cards and no hero. */}
+      <div className="pi-desktop">
+      {displayMode === 'hero' ? (
+        /* Banner beside a map. Reuses the real .pi-hero-wrap / .pi-hero-row —
+           plain flex boxes with a gap — so the placeholder stacks at 1180px
+           off the same rule the content does, rather than a copy of it. */
+        <div className="pi-hero-wrap" aria-hidden="true">
+          <span className="pi-skel-bar pi-skel-crumb" />
+          <div className="pi-hero-row">
+            <span className="pi-skel-block pi-skel-hero-card" />
+            <span className="pi-skel-block pi-skel-hero-map" />
+          </div>
+        </div>
+      ) : (
       <div className="pi-skel" aria-hidden="true">
         <div className="pi-skel-info">
           <span className="pi-skel-bar pi-skel-name" />
@@ -94,6 +113,28 @@ function PropertySkeleton() {
           <div className="pi-skel-cards">
             <span className="pi-skel-block" />
             <span className="pi-skel-block" />
+          </div>
+        </div>
+      </div>
+      )}
+      </div>
+
+      <div className="pi-mobile">
+        <div className="pi-skel-m" aria-hidden="true">
+          <span className="pi-skel-block pi-skel-m-hero" />
+          <div className="pi-skel-m-circles">
+            {Array.from({ length: 5 }, (_, i) => (
+              <div className="pi-skel-m-circle-item" key={i}>
+                <span className="pi-skel-bar pi-skel-m-circle" />
+                <span className="pi-skel-bar pi-skel-m-circle-label" />
+              </div>
+            ))}
+          </div>
+          <div className="pi-skel-m-hours">
+            <span className="pi-skel-bar pi-skel-m-hour" />
+            <span className="pi-skel-bar pi-skel-m-hour" />
+            <span className="pi-skel-bar pi-skel-m-hour" />
+            <span className="pi-skel-bar pi-skel-m-seehours" />
           </div>
         </div>
       </div>
@@ -1006,7 +1047,7 @@ export function PropertyInfo(props: Props) {
   if (loading || ratingLoading) {
     return (
       <div className="pi-wrapper">
-        <PropertySkeleton />
+        <PropertySkeleton displayMode={displayMode} />
       </div>
     );
   }

@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { BLOG_IMAGES, cover } from '@shared/demoImages';
 import { hasCollectionsApi } from '@shared/dudaCollections';
 import { fetchBlogPosts, type BlogPostData } from '@shared/blogPosts';
-import { useSwipe } from '@shared/useSwipe';
+import { useCarousel, usePrefersReducedMotion } from '@shared/useCarousel';
+import { CarouselDots } from '@shared/CarouselDots';
 import { CarouselChevron } from '../chevron';
 
 // ---------------------------------------------------------------------------
@@ -76,54 +77,77 @@ export interface BlogCarouselProps {
  * so the two can never drift into looking like different cards.
  */
 export function BlogCarousel({ posts, footer }: BlogCarouselProps) {
-  const [page, setPage] = useState(0);
-
-  // Clamping happens inside the updater so it reads the live list length.
-  const swipe = useSwipe({
-    onSwipeLeft: () => setPage((p) => Math.min(posts.length - 1, p + 1)),
-    onSwipeRight: () => setPage((p) => Math.max(0, p - 1)),
-  });
-
-  // Clamp rather than store-and-correct, so a shrinking list can't leave us on a
-  // page that no longer exists.
   const total = posts.length;
-  const current = Math.min(page, total - 1);
-  const post = posts[current];
-  // authorName / publishDate can both be blank on a row — build the byline from
-  // whichever parts exist so it never reads "By ,".
-  const byline = [post.author && `By ${post.author}`, post.date].filter(Boolean).join(',  ');
-  const linked = !!post.href && post.href !== '#';
+  // One post at a time, dragged with the finger — the same shared hook the blog
+  // listing (#12) and Nearby Storage use, so the feel and the 6-dot cap are
+  // identical everywhere. Index clamping lives in the hook.
+  const carousel = useCarousel({ count: total, perView: 1, draggable: true });
+  const reduceMotion = usePrefersReducedMotion();
+  const current = carousel.index;
 
   return (
     <div className="sl-blog2">
 
       {/* Gray background zone with card. Swipeable: the arrows are hidden on
           mobile (see SpaceList.css), so this is how you move between posts. */}
-      <div className="sl-blog2-bg" {...swipe.handlers}>
-        <div className="sl-blog2-card">
-
-          {/* Hero image */}
+      <div className="sl-blog2-bg">
+        {/* Every post renders once and one transform slides the row; the window
+            clips the rest. Drag handlers sit on the window so a swipe anywhere
+            over the card moves it. */}
+        <div className="sl-blog2-track-window" {...carousel.handlers}>
           <div
-            className="sl-blog2-image"
-            style={{ background: post.image ? cover(post.image) : NO_IMAGE }}
-          />
+            className="sl-blog2-track"
+            style={{
+              transform: `translateX(calc(${(carousel.offsetPct / 100).toFixed(6)} * 100%))`,
+              transition:
+                reduceMotion || carousel.dragging
+                  ? 'none'
+                  : 'transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1)',
+            }}
+          >
+            {posts.map((p, i) => {
+              // authorName / publishDate can both be blank on a row — build the
+              // byline from whichever parts exist so it never reads "By ,".
+              const byline = [p.author && `By ${p.author}`, p.date].filter(Boolean).join(',  ');
+              const linked = !!p.href && p.href !== '#';
+              return (
+                <div
+                  className="sl-blog2-track-item"
+                  key={p.id}
+                  // Clipped posts keep their links focusable, so tabbing would
+                  // walk into a card nobody can see.
+                  {...(i === current ? {} : { inert: '' as unknown as boolean })}
+                  aria-hidden={i === current ? undefined : true}
+                >
+                  <div className="sl-blog2-card">
 
-          {/* Card body */}
-          <div className="sl-blog2-body">
-            <p className="sl-blog2-title">
-              {linked ? <a className="sl-blog2-title-link" href={post.href}>{post.title}</a> : post.title}
-            </p>
-            {byline && <p className="sl-blog2-byline">{byline}</p>}
-            {post.excerpt && <p className="sl-blog2-excerpt">{post.excerpt}</p>}
-            <div className="sl-blog2-footer">
-              <a href={linked ? post.href : '#'} className="sl-blog2-read-more">Read more</a>
-              <div className="sl-blog2-share">
-                <ShareIcon />
-                <a href="#" className="sl-blog2-share-link">Share</a>
-              </div>
-            </div>
+                    {/* Hero image */}
+                    <div
+                      className="sl-blog2-image"
+                      style={{ background: p.image ? cover(p.image) : NO_IMAGE }}
+                    />
+
+                    {/* Card body */}
+                    <div className="sl-blog2-body">
+                      <p className="sl-blog2-title">
+                        {linked ? <a className="sl-blog2-title-link" href={p.href}>{p.title}</a> : p.title}
+                      </p>
+                      {byline && <p className="sl-blog2-byline">{byline}</p>}
+                      {p.excerpt && <p className="sl-blog2-excerpt">{p.excerpt}</p>}
+                      <div className="sl-blog2-footer">
+                        <a href={linked ? p.href : '#'} className="sl-blog2-read-more">Read more</a>
+                        <div className="sl-blog2-share">
+                          <ShareIcon />
+                          <a href="#" className="sl-blog2-share-link">Share</a>
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+              );
+            })}
           </div>
-
         </div>
       </div>
 
@@ -132,23 +156,26 @@ export function BlogCarousel({ posts, footer }: BlogCarouselProps) {
         <div className="sl-blog2-pagination">
           <button
             className="sl-blog2-arrow"
-            onClick={() => setPage(Math.max(0, current - 1))}
-            disabled={current === 0}
+            onClick={carousel.prev}
+            disabled={!carousel.canPrev}
+            aria-label="Previous post"
           >
             <CarouselChevron dir="left" />
           </button>
-          {posts.map((p, i) => (
-            <button
-              key={p.id}
-              className={`sl-blog2-dot${i === current ? ' active' : ''}`}
-              onClick={() => setPage(i)}
-              aria-label={`Post ${i + 1}`}
-            />
-          ))}
+          {/* Capped at 6 with the window sliding — a collection with 20 posts
+              must not print 20 dots into a sidebar this narrow. */}
+          <CarouselDots
+            count={total}
+            active={current}
+            onPick={carousel.goTo}
+            dotClass="sl-blog2-dot"
+            label="Go to post {n}"
+          />
           <button
             className="sl-blog2-arrow"
-            onClick={() => setPage(Math.min(total - 1, current + 1))}
-            disabled={current === total - 1}
+            onClick={carousel.next}
+            disabled={!carousel.canNext}
+            aria-label="Next post"
           >
             <CarouselChevron dir="right" />
           </button>

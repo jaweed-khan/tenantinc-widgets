@@ -84,6 +84,21 @@ export interface UtilityBarProps {
   showClose?: boolean;
   sticky?: boolean;
   dismissDurationHours?: number;
+  /**
+   * Bar colour, from the Duda content menu's radio group
+   * (`data.config.utilitybarColour`): `black` | `primary` | `cta`.
+   *
+   * Anything else — unset, an unsubstituted token, a value someone renames in
+   * Duda — falls back to black, which is what the bar has always been.
+   */
+  utilitybarColour?: string;
+  /**
+   * Message, info mark and close mark colour, from the Duda content menu's
+   * radio group (`data.config.textColour`): `white` | `black`. Anything else
+   * falls back to white. The tooltip keeps its own palette either way — it is
+   * a dark box floating off the bar, not part of it.
+   */
+  textColour?: string;
   inEditor?: boolean;
 }
 
@@ -95,8 +110,19 @@ export function UtilityBar({
   showClose = true,
   sticky = false,
   dismissDurationHours = 24,
+  utilitybarColour,
+  textColour,
   inEditor = false,
 }: UtilityBarProps) {
+  /* Normalised, not trusted: Duda sends whatever the radio's value column
+     holds, and an unbound field can arrive as '', undefined, or a literal
+     '{{utilitybarColour}}'. Only the three known values do anything. */
+  const barTone = (() => {
+    const v = String(utilitybarColour ?? '').trim().toLowerCase();
+    return v === 'primary' || v === 'cta' ? v : 'black';
+  })();
+  /* Same treatment: only 'black' does anything, everything else is white. */
+  const textTone = String(textColour ?? '').trim().toLowerCase() === 'black' ? 'black' : 'white';
   // Read the flag synchronously on first render so the bar never flashes.
   const [flagActive, setFlagActive] = useState<boolean>(() => isFlagActive());
   const [, setTick] = useState(0);
@@ -119,7 +145,16 @@ export function UtilityBar({
       if (e.key === 'Escape') setModalOpen(false);
     }
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    /* The page behind must not scroll under the overlay. Body overflow, the
+       same lock every other modal in the repo uses — safe here because this
+       widget's bar is `position: fixed`, not sticky, so an overflow-hidden
+       body cannot take away a scrollport it never used. */
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+    };
   }, [modalOpen]);
 
   function handleClose() {
@@ -181,7 +216,7 @@ export function UtilityBar({
   return (
     <div className={`ub-wrapper${empty ? ' ub-wrapper--empty' : ''}`} ref={rootRef}>
       {showBar && (
-        <div className={`ub-bar ${sticky ? 'ub-bar--sticky' : 'ub-bar--block'}`}>
+        <div className={`ub-bar ub-bar--${barTone} ub-bar--text-${textTone} ${sticky ? 'ub-bar--sticky' : 'ub-bar--block'}`}>
           <div className="ub-inner">
             <div className="ub-spacer" />
             <div className="ub-message-wrap">
@@ -196,7 +231,7 @@ export function UtilityBar({
                       32 FRAME rather than a scaled 52: `outlined` picks the
                       ring per size (stroke 2 / inset 1 at 32, stroke 3 / inset
                       1.5 at 52), and `size <= 32` is the switch. */}
-                  <CloseCircleIcon outlined size={32} />
+                  <CloseCircleIcon outlined size={32} color="currentColor" />
                 </button>
               )}
             </div>

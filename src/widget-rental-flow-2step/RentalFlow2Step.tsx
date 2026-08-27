@@ -278,10 +278,26 @@ function Field({
  * (backToSpacesUrl) and is absent on a direct navigation, so its 20px + 24px gap
  * would over-reserve in exactly the case where someone opens /rental cold.
  */
-function RailSkeleton() {
+function RailSkeleton({ sheet = false }: { sheet?: boolean }) {
   return (
     <aside className="ts-card" aria-hidden="true">
-      <div className="ts-card-hero"><Shimmer w="100%" h="100%" r={0} /></div>
+      {/* Whichever header this copy of the rail will show. The sheet's is the
+          logo row (.rf-sheethead), reusing the real header's classes so the
+          two cannot drift — same padding, same 8px gap, same column, and the
+          address reserves 30px because it is one <p> of two 15px lines. The
+          desktop column still opens with the photo, so it keeps the full-bleed
+          block it always had. */}
+      {sheet ? (
+        <div className="rf-sheethead rf-sheethead--skel">
+          <Shimmer w={184} h={82} r={4} />
+          <div className="rf-sheethead-info">
+            <Shimmer w={128} h={30} r={4} />
+            <Shimmer w={116} h={15} r={4} />
+          </div>
+        </div>
+      ) : (
+        <div className="ts-card-hero"><Shimmer w="100%" h="100%" r={0} /></div>
+      )}
       <div className="ts-card-body">
         {/* .ts-card-top is a two-column flex, so its height is the TALLER of the
             two. Both sides are at their minimum, making this row 50px — exactly
@@ -350,9 +366,13 @@ function MobileLeaseBar({
   );
 }
 
-// Sticky collapsed cost bar (mobile): "Total Paid to Move-In: $X /
+// Sticky collapsed cost bar (mobile): "Total Cost to Move-In: $X /
 // Holding Space for 14:59" + chevron. Tapping toggles the full rail
 // card in a drop-down sheet (spec-05 Total Cost Dropdown Card).
+//
+// COST, not paid: this bar only exists inside the flow, where nothing has been
+// charged yet — there is still a hold counting down beside it. The
+// confirmation page has its own bar, MobileLeaseBar, which says "Total Paid:".
 function MobileRailBar({
   total, holdRemaining, expanded, onToggle,
 }: {
@@ -366,7 +386,7 @@ function MobileRailBar({
       {/* Two rows, each space-between (Figma 8509-51290): title | price, then
           countdown | chevron. */}
       <span className="rfm-bar-row">
-        <span className="rfm-bar-title">Total Paid to Move-In:</span>
+        <span className="rfm-bar-title">Total Cost to Move-In:</span>
         <span className="rfm-bar-total">{total != null ? `$${total.toFixed(2)}` : '\u2014'}</span>
       </span>
       <span className="rfm-bar-row">
@@ -914,7 +934,19 @@ export function RentalFlow2Step({
       // The old 200px floor traded a faithfully-measured 20px sheet for a
       // usable scrollable one. That trade has inverted — overflow used to run
       // harmlessly off the bottom, where now it carries the bar off with it.
-      wrap.style.setProperty('--rfm-sheet-max', `${room}px`);
+      //
+      // CLAMPED TO THE CONTENT, not just to `room`. `room` is a CAP, and
+      // max-height only caps: a card shorter than the screen leaves the wrap at
+      // its content height while this variable says otherwise. The opening
+      // animation then finishes early — the clip stops growing at the content
+      // height while .rfm-sheet's translateY, which travels its OWN height, is
+      // still running. That gap between the two is the sheet visibly parting
+      // from the bar riding on its bottom edge. Taking the smaller of the two
+      // makes the distance the clip grows and the distance the sheet travels
+      // the same number, so they arrive together.
+      const sheet = wrap.querySelector<HTMLElement>('.rfm-sheet');
+      const content = sheet ? sheet.scrollHeight : room;
+      wrap.style.setProperty('--rfm-sheet-max', `${Math.min(room, content)}px`);
     };
     measure();
     // The bar can still move: it is only pinned once the page has scrolled past
@@ -1646,7 +1678,7 @@ export function RentalFlow2Step({
     window.scrollTo({ top: Math.max(0, window.scrollY + top), behavior: 'auto' });
 
     /*
-     * Step 2 then travels down to just under the email row.
+     * Step 2 then travels down to the name row, after a short pause.
      *
      * Two moves on purpose, not one: the jump above puts the widget's top on
      * screen so the shopper sees WHERE they are, and the glide gives them the
@@ -1657,17 +1689,57 @@ export function RentalFlow2Step({
      * offset by its measured height (--rf-hdr-h) plus a margin.
      */
     if (screen !== 'step2') return;
-    const id = requestAnimationFrame(() => {
+
+    let raf = 0;
+    /* Half a second on the jumped-to top before anything moves. Without it the
+       glide starts under the shopper's hand as the screen is still settling
+       and reads as the page lurching rather than travelling. */
+    const timer = window.setTimeout(() => {
       const rest = wrapRef.current?.querySelector('[data-rf2-rest]');
       if (!rest) return;
       const hdr = parseFloat(
         getComputedStyle(wrapRef.current!).getPropertyValue('--rf-hdr-h'),
       ) || 0;
-      const y = window.scrollY + rest.getBoundingClientRect().top - hdr - 16;
-      const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-      window.scrollTo({ top: Math.max(0, y), behavior: reduce ? 'auto' : 'smooth' });
-    });
-    return () => cancelAnimationFrame(id);
+      const to = Math.max(0, window.scrollY + rest.getBoundingClientRect().top - hdr - 16);
+      if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+        window.scrollTo({ top: to, behavior: 'auto' });
+        return;
+      }
+      const from = window.scrollY;
+      const dist = to - from;
+      if (!dist) return;
+
+      /* Animated here rather than with `behavior: 'smooth'`, because the
+         native one takes no duration — the browser picks it (Chrome lands
+         around half a second for a trip this size) and there is no way to ask
+         for slower. 1.8ms per pixel is roughly twice that, clamped so a short
+         hop is still unhurried and a long one on a phone does not crawl. */
+      const duration = Math.min(1500, Math.max(700, Math.abs(dist) * 1.8));
+      const start = performance.now();
+      // easeInOutCubic — starts and ends still, so the halved speed reads as
+      // deliberate rather than as the page being slow to respond.
+      const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - ((-2 * t + 2) ** 3) / 2);
+
+      /* A scroll this long is easy to overtake, and fighting the shopper for
+         the scrollbar is worse than not animating at all. Any real input hands
+         the page straight back. */
+      let cancelled = false;
+      const stop = () => { cancelled = true; };
+      const opts = { passive: true, once: true } as const;
+      window.addEventListener('wheel', stop, opts);
+      window.addEventListener('touchstart', stop, opts);
+      window.addEventListener('keydown', stop, opts);
+
+      const step = (now: number) => {
+        if (cancelled) return;
+        const t = Math.min(1, (now - start) / duration);
+        window.scrollTo(0, from + dist * ease(t));
+        if (t < 1) raf = requestAnimationFrame(step);
+      };
+      raf = requestAnimationFrame(step);
+    }, 500);
+
+    return () => { window.clearTimeout(timer); cancelAnimationFrame(raf); };
   }, [screen]);
 
   if (confirmation) {
@@ -1699,6 +1771,7 @@ export function RentalFlow2Step({
         selection={snap?.selection}
         quote={snap?.quote}
         estimate={confirmation.kind === 'reservation'}
+        paid
       />
     );
     return (
@@ -1807,8 +1880,12 @@ export function RentalFlow2Step({
   // same property, space and money — so they render the same element rather
   // than three OrderRails that can drift apart. The post-purchase variant only
   // drops "Change Space", which is meaningless once the unit is rented.
-  const railFor = (rented: boolean) => (
+  /* `sheet` is the mobile dropdown's copy. Only it swaps the photo hero for
+     the logo row — the desktop column keeps the image, and the two are never
+     rendered at once, so one flag on this builder is enough. */
+  const railFor = (rented: boolean, sheet = false) => (
     <OrderRail
+      sheetLogo={sheet ? headerLogo : undefined}
       property={railProperty}
       selection={railSelection}
       quote={railQuote}
@@ -1830,7 +1907,12 @@ export function RentalFlow2Step({
       // about a date the quote already reflects would be its own small lie.
     />
   );
+  /* TWO of them. `rail` is rendered in both places — the desktop column at
+     `{!isMobile && rail}` and the mobile sheet — so a single flagged copy put
+     the sheet's logo header on the desktop rail as well. The desktop one keeps
+     the photo hero; only the sheet's is flagged. */
   const rail = loading ? <RailSkeleton /> : railFor(false);
+  const sheetRail = loading ? <RailSkeleton sheet /> : railFor(false, true);
 
   if (staticPaid) {
     // The held unit is real even on the static path — the hold and quote both
@@ -1971,7 +2053,7 @@ export function RentalFlow2Step({
               rendered element cannot transition, it can only appear. */}
           <div className="rfm-panel">
             <div className={`rfm-sheet-wrap${railOpen ? ' rfm-sheet-wrap--open' : ''}`}>
-              <div className="rfm-sheet">{rail}</div>
+              <div className="rfm-sheet">{sheetRail}</div>
             </div>
             <MobileRailBar
               total={quote?.totalDue}

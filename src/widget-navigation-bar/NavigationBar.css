@@ -507,6 +507,16 @@
   opacity: 0;
   transition: opacity 0.32s ease;
   cursor: pointer;
+  /* The page behind must not scroll while the drawer is open, and this widget
+     CANNOT use the body-overflow lock the other modals use: the nav bar is
+     `position: sticky`, and an overflow-hidden ancestor becomes a sticky
+     element's scrollport — a box that never scrolls — which drops the bar back
+     to its document position. FindStorageMegaMenu documents that exact
+     regression. So the scroll is refused here instead, the same way
+     .rfm-scrim does it in the rental flow.
+     Wheel has no CSS equivalent; a native non-passive listener covers it. */
+  touch-action: none;
+  overscroll-behavior: contain;
 }
 
 .nav-mobile-menu.is-open .nav-mm-overlay {
@@ -527,6 +537,9 @@
      extends the document scroll width (the white gap down the right). */
   overflow-x: hidden;
   overflow-y: auto;
+  /* The drawer scrolls; the page under it does not inherit the gesture when
+     the list reaches its end. */
+  overscroll-behavior: contain;
   box-shadow: -8px 0 24px rgba(16, 19, 24, 0.12);
   transform: translateX(100%);
   transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);

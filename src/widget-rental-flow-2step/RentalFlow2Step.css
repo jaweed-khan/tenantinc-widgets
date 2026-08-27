@@ -1933,15 +1933,6 @@
    same reason as the size above: .hb-money is shared with #14. */
 .rf-wrapper .hb-money { gap: 6px; }
 
-/* The rail's "#SPACE16 | 8' x 6'" heading, 24px -> 21px, to buy the row
-   beneath it room on a narrow screen. Scoped to .rf-wrapper for the same
-   reason as the two rules above — SummaryRail is shared with #14, which also
-   carries its OWN .ts-card-size at 24px in TierSelection.css. Editing the
-   component's rule would have set the two copies fighting on source order in
-   #14's bundle; a (0,2,0) scope cannot reach #14 at all.
-   Keep the Shimmer in RentalFlow2Step.tsx in step: it reserves 21 * 1.2. */
-.rf-wrapper .ts-card-size { font-size: 21px; }
-
 /* "Change Space", 16px -> 14px on a phone. Same .rf-wrapper scope and the same
    reason as the heading above: .ts-card-change is shared with #14, which keeps
    its own 16px copy in TierSelection.css, so a (0,2,0) scope is what keeps the
@@ -1951,6 +1942,16 @@
    JS measures the WRAPPER and the query measures the viewport, so they can
    disagree by a hair at exactly 640; for a font size that is harmless.) */
 @media (max-width: 640px) {
+  /* The rail's "#SPACE16 | 8' x 6'" heading, 24px -> 21px, to buy the row
+     beneath it room in the dropdown. PHONE ONLY: this was declared at the top
+     level, so it also shrank the heading on the desktop rail, which was never
+     the ask — the desktop column keeps SummaryRail's 24px.
+     Still .rf-wrapper-scoped inside here, because .ts-card-size is shared with
+     #14, which carries its own 24px copy in TierSelection.css; a (0,2,0) scope
+     is what keeps the two apart whatever the source order.
+     RailSkeleton's Shimmer reserves 21 * 1.2 and is drawn only in the sheet,
+     so it stays in step with this. */
+  .rf-wrapper .ts-card-size { font-size: 21px; }
   .rf-wrapper .ts-card-change { font-size: 14px; }
   /* "I agree to the terms..." 16px -> 14px. Line-height stays 18px, which is
      what keeps the top-aligned checkbox sitting on the first line. */
@@ -1977,6 +1978,73 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ── Mobile dropdown header (Figma 12028-86142) ───────────────────────────
+   Logo left, address over phone on the right. Replaces SummaryRail's photo
+   hero through its `heroSlot`, so only the sheet's copy of the rail changes —
+   the desktop column keeps the image. Inside the panel that photo was a second
+   showing of what the page already displays, and the panel is opened for the
+   numbers under it.
+   12px on both lines, no address icon, and the phone mark is the kit's own
+   rather than the frame's export. */
+.rf-wrapper .rf-sheethead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  /* No top padding: the frame starts the logo at the container's edge and
+     insets only the text column, which is what .rf-sheethead-info does.
+     None at the bottom either. .ts-card-body opens with 20px of its own
+     (.rfm-sheet .ts-card-body), and 24 + 20 left a 44px band between the logo
+     row and the first line of the summary — this halves it to that 20. */
+  padding: 0 24px;
+  background: #fff;
+}
+/* The skeleton's version needs the top padding the real one does not: a logo
+   PNG carries its own transparent margin, so it never touches the edge, but a
+   shimmer block is solid to its corners and sat flush against it. Only the
+   placeholder is inset, so nothing about the real header moves. */
+.rf-wrapper .rf-sheethead--skel { padding-top: 16px; }
+.rf-wrapper .rf-sheethead-logo {
+  flex: 0 0 auto;
+  /* 184x82 in the frame. Width auto against a max keeps a customer's own logo
+     in proportion rather than stretching it to those exact numbers. */
+  width: auto;
+  height: 82px;
+  max-width: 184px;
+  object-fit: contain;
+  object-position: left center;
+}
+.rf-wrapper .rf-sheethead-info {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  /* 12, not the frame's 24: the address sat low against an 82px logo beside
+     it, and the column reads as belonging to the logo rather than floating
+     under it at half that inset. */
+  padding-top: 12px;
+}
+.rf-wrapper .rf-sheethead-addr {
+  margin: 0;
+  font-size: 12px;
+  line-height: 15px;
+  color: #101318;
+  text-align: right;
+}
+.rf-wrapper .rf-sheethead-phone {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  font-size: 12px;
+  color: #101318;
+  text-decoration: underline;
+  white-space: nowrap;
+}
+.rf-wrapper .rf-sheethead-phone svg { flex: 0 0 auto; }
 
 /* --- Mobile: sticky top cost bar + drop-down rail sheet ------------------ */
 /* The bar's slot in the flow. Everything visible sits in .rfm-panel, which is
@@ -2172,6 +2240,11 @@
 .rfm-sheet .ts-card,
 .rfm-sheet .rfr-card { width: 100%; max-width: none; border-radius: 0; box-shadow: none; }
 .rfm-sheet .ts-card-body { padding: 20px; }
+/* Amenities 14px -> 12px in the dropdown. Scoped to .rfm-sheet rather than
+   .rf-wrapper: .ts-feat is SummaryRail's and #14 uses it too, and the desktop
+   rail in this very widget keeps the 14px — only the sheet is tight enough to
+   need the smaller line. */
+.rfm-sheet .ts-feat { font-size: 12px; }
 .rfm-sheet .ts-card-top { flex-wrap: wrap; gap: 12px; }
 .rfm-sheet .ts-card-prices { height: auto; }
 .rfm-sheet .ts-card-line span,

@@ -368,13 +368,17 @@
 .pi-skel-line.short { width: 62%; }
 .pi-skel-crumb { height: 18px; width: 60%; }
 
-/* Matches .pi-gallery's height so the real cards drop straight in. */
+/* Matches .pi-gallery's height so the real cards drop straight in — and it is
+   317px at EVERY width, because .pi-gallery has no responsive height. */
 .pi-skel-block {
   flex: 1 1 0;
   min-width: 0;
   height: 317px;
   border-radius: 16px;
 }
+/* Both cards in .pi-cards are 317px: .pi-gallery and .pi-map carry the same
+   height. The 302px this used to set belongs to .pi-hero-card, which is the
+   HERO display mode — a different layout that .pi-cards is not part of. */
 
 @keyframes pi-skel-shimmer {
   from { background-position: 100% 50%; }
@@ -386,12 +390,104 @@
   .pi-skel-block { animation: none; }
 }
 
-/* Single column on the mobile frame, matching the real layout. */
-@media (max-width: 900px) {
-  .pi-skel { flex-direction: column; }
-  .pi-skel-cards { flex-direction: column; }
-  .pi-skel-block { height: 220px; }
+/* Single column, matching the real layout — which stacks at 1180px, NOT 900.
+   .pi-row, .pi-cards and .pi-card-col all change at 1180, so a skeleton that
+   waited until 900 stayed two-up across a 280px band where the real content is
+   already one column, and the page re-flowed when the fetch landed.
+
+   The rules mirror those three exactly rather than approximating them: wrap
+   like .pi-cards and take .pi-card-col's `1 1 360px`, instead of forcing a
+   column — same result on a phone, but correct in the band between.
+
+   No height override. The old 220px was the other half of the jump: neither
+   real card shrinks on mobile, so the placeholder was ~100px short of each. */
+@media (max-width: 1180px) {
+  /* `align-items: stretch` is the load-bearing half of this rule, not tidying.
+     .pi-skel is align-items: flex-start for the side-by-side layout, and once
+     the direction turns to column that starts sizing both children
+     SHRINK-TO-FIT on the cross axis. The real .pi-row survives that because
+     its columns are full of text and cards with natural widths; the skeleton
+     is percentage-width bars (72%, 88%) and empty blocks, which have no
+     natural width at all — so they collapsed to slivers a few pixels wide.
+     Stretch gives each column the full row, and the percentages resolve
+     against something real again. */
+  .pi-skel { flex-direction: column; align-items: stretch; }
+  /* Half each, exactly as .pi-cards and .pi-card-col above. */
+  .pi-skel-cards { flex-wrap: nowrap; }
+  .pi-skel-cards > .pi-skel-block { flex: 1 1 0; min-width: 0; }
 }
+
+/* ── Hero-mode skeleton ───────────────────────────────────────────────────
+   The hero layout is a banner beside a map, not an info column beside two
+   cards, so it needs its own placeholder. It reuses the REAL .pi-hero-wrap
+   and .pi-hero-row containers — both are plain flex boxes with a gap — so the
+   stacking at 1180px comes from the same rule the content obeys. Only the two
+   boxes are stood in for, mirroring .pi-hero-card and .pi-hero-map. */
+.pi-skel-hero-card {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 302px;
+}
+.pi-skel-hero-map {
+  flex-shrink: 0;
+  width: 422px;
+  max-width: 100%;
+  height: 302px;
+}
+@media (max-width: 1180px) {
+  /* Both halves of the tablet fix above, for the same reasons. */
+  .pi-skel-hero-card { flex: 0 0 auto; }
+  .pi-skel-hero-map { width: auto; }
+}
+
+/* ── Mobile skeleton ──────────────────────────────────────────────────────
+   The mobile view is a DIFFERENT composition, not a narrower desktop one, so
+   it needs its own placeholder: full-bleed hero, a row of five circles, then
+   a centred hours block. Which one shows is decided by .pi-desktop /
+   .pi-mobile in the markup — the same switch the real layouts use, so the two
+   cannot disagree about where the boundary is.
+   Every number below is taken from the rule it stands in for: .pi-m-hero's
+   min-height, .pi-m-circles' padding and gap, .pi-m-circle's 44px, and
+   .pi-m-hours' padding and gap. Change one, change the other. */
+.pi-skel-m-hero {
+  /* No radius: .pi-wrapper drops its inline padding under 768px so the real
+     hero runs edge to edge. */
+  height: 250px;
+  border-radius: 0;
+}
+.pi-skel-m-circles {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 24px 12px;
+}
+.pi-skel-m-circle-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 0;
+  min-width: 0;
+}
+.pi-skel-m-circle {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+}
+.pi-skel-m-circle-label { height: 14px; width: 76%; }
+.pi-skel-m-hours {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 0 16px 24px;
+}
+/* Three status lines of uneven length, then the underlined link below them. */
+.pi-skel-m-hour { height: 20px; width: 72%; }
+.pi-skel-m-hour:nth-of-type(2) { width: 64%; }
+.pi-skel-m-hour:nth-of-type(3) { width: 78%; }
+.pi-skel-m-seehours { height: 20px; width: 40%; margin-top: 8px; }
 
 /* Visually hidden, still announced. */
 .pi-sr-only {
@@ -958,21 +1054,55 @@ span.pi-lb-img {
      column reads as stranded rather than placed. */
   .pi-media > .pi-breadcrumb { justify-content: flex-start; }
 
+  /* `align-items: stretch` is doing the work here, not the direction change.
+     .pi-row is align-items: flex-start for the side-by-side layout, and once
+     it turns to a column that sizes both children SHRINK-TO-FIT on the cross
+     axis: .pi-info fell back to its 280px min-width and .pi-media — which is
+     flex-shrink: 0 — took whatever .pi-cards happened to measure. So the whole
+     widget stopped a few hundred pixels short of the column it was given.
+     Same fault, same fix as .pi-skel in d448e40; I assumed there that the real
+     row survived it because its columns hold real content. It does not — it
+     just lands on a content width instead of collapsing, which is harder to
+     see than an empty skeleton doing the same thing. */
   .pi-row {
     flex-direction: column;
+    align-items: stretch;
   }
 
+  /* Gallery and map stay side by side, half each. They used to be `1 1 360px`
+     in a wrapping row, which needs 360 + 360 + 24 = 744px of column before
+     both fit — so anything narrower than that dropped the map under the
+     gallery, and anything wider gave the two unequal widths (each grew from a
+     360px basis, so the free space split evenly on top of it rather than
+     producing halves).
+     A zero basis with min-width: 0 is what makes them true halves: nothing to
+     distribute unevenly, and each can shrink under its content. Only this
+     block below 768px, where .pi-desktop is display:none and the mobile
+     composition takes over entirely. */
   .pi-cards {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
   }
 
   .pi-card-col {
-    flex: 1 1 360px;
+    flex: 1 1 0;
+    min-width: 0;
     width: auto;
   }
 
   .pi-hero-row {
     flex-direction: column;
+  }
+
+  /* `flex: 1 1 0` sets the basis on the MAIN axis, and the row just became a
+     column — so that zero basis started governing HEIGHT and overrode the
+     302px below it, collapsing the banner to nothing. There is no free space
+     for flex-grow to give back either, because .pi-hero-row has no height of
+     its own. Basis auto hands the 302px back.
+     The map never hit this: it only sets flex-shrink, so its basis stayed
+     auto and its own height kept applying — which is why the map was there
+     and the banner above it was not. */
+  .pi-hero-card {
+    flex: 0 0 auto;
   }
 
   .pi-hero-map {

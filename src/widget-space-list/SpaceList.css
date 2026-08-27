@@ -2588,6 +2588,29 @@
   padding-bottom: 24px;
 }
 
+/* ── Sliding track (Nearby Storage carousel) ──────────────────────────────
+   One card per view: every property renders once and a single transform moves
+   the row, so advancing animates instead of swapping the card out. The window
+   clips the rest. `touch-action: pan-y` keeps a vertical drag scrolling the
+   page while a horizontal one belongs to the carousel — see @shared/useCarousel. */
+.sl-wrapper .sl-nb2-track-window {
+  overflow: hidden;
+  touch-action: pan-y;
+}
+
+.sl-wrapper .sl-nb2-track {
+  display: flex;
+  align-items: stretch;
+  will-change: transform;
+}
+
+/* Exactly one window wide, so the pitch the transform steps by and the card
+   width are the same quantity. */
+.sl-wrapper .sl-nb2-track-item {
+  flex: 0 0 100%;
+  min-width: 0;
+}
+
 .sl-wrapper .sl-nb2-map-placeholder {
   height: 300px;
   background: #dfe3e8;
@@ -2957,9 +2980,13 @@
   flex-shrink: 0;
 }
 
+/* 50% and inert at the ends — the agreed signal that there is nothing further
+   this way (was a grey colour swap, which read as a different icon rather than
+   a disabled one). */
 .sl-wrapper .sl-nb2-arrow:disabled {
-  color: #a5b4bf;
+  opacity: 0.5;
   cursor: default;
+  pointer-events: none;
 }
 
 .sl-wrapper .sl-nb2-dot {
@@ -3392,6 +3419,29 @@
   padding: 21px 28px 0;
 }
 
+/* ── Sliding track (Self Storage Blog carousel) ───────────────────────────
+   One post per view: every post renders once and a single transform moves the
+   row, so advancing animates instead of swapping the card out. The window clips
+   the rest. `touch-action: pan-y` keeps a vertical drag scrolling the page while
+   a horizontal one belongs to the carousel — see @shared/useCarousel. */
+.sl-wrapper .sl-blog2-track-window {
+  overflow: hidden;
+  touch-action: pan-y;
+}
+
+.sl-wrapper .sl-blog2-track {
+  display: flex;
+  align-items: stretch;
+  will-change: transform;
+}
+
+/* Exactly one window wide, so the pitch the transform steps by and the card
+   width are the same quantity. */
+.sl-wrapper .sl-blog2-track-item {
+  flex: 0 0 100%;
+  min-width: 0;
+}
+
 /* White card */
 .sl-wrapper .sl-blog2-card {
   background: #ffffff;
@@ -3594,9 +3644,13 @@
   background: #f4f6f8;
 }
 
+/* 50% and inert at the ends — the agreed signal that there is nothing further
+   this way (was a grey colour swap, which read as a different icon rather than
+   a disabled one). */
 .sl-wrapper .sl-blog2-arrow:disabled {
-  color: #a5b4bf;
+  opacity: 0.5;
   cursor: default;
+  pointer-events: none;
 }
 
 .sl-wrapper .sl-blog2-dot {
@@ -3966,6 +4020,24 @@
   .sl-wrapper .sl-top-bar-pills > .sl-top-bar-pill:not(.sl-top-bar-more):nth-of-type(n+3) {
     display: none;
   }
+}
+
+/* A real phone keeps EVERY tag, whatever the container above resolves to.
+   The truncation is a container query so it can follow the bar's own width
+   rather than the browser's — right for the sidebar layout, but it means the
+   bar's container changes underneath it: normally .sl-listing-area, and
+   .sl-wrapper.sl-top-bar-pinned once the bar is portaled out to the sticky
+   stack. If either resolves over 600px on a phone the tags after the second
+   one vanish with no "More" to reach them, because "More" is a desktop-only
+   affordance. This is the backstop: same selectors, same specificity, later in
+   the file, keyed to the VIEWPORT so it cannot be argued with.
+   .sl-top-bar-pills is already flex + overflow-x: auto, so the full row
+   scrolls under the finger. */
+@media (max-width: 600px) {
+  .sl-wrapper .sl-top-bar-pills > .sl-top-bar-pill:not(.sl-top-bar-more):nth-of-type(n+3) {
+    display: inline-flex;
+  }
+  .sl-wrapper .sl-top-bar-more { display: none; }
 }
 
 /* When FilterPanel drops down below the top bar, make it full-width */

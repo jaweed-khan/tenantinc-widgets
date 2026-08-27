@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import './NavigationBar.css';
 import storelocalLogo from './Storelocal_logo.png';
 import { CloseCircleIcon } from '@shared/ui';
@@ -193,10 +193,12 @@ const FIND_STORAGE_LABEL = 'Find Storage';
  * drawer and the mega menu now point at the same places. "All Locations" stays
  * pinned to the top.
  *
- * Every city keeps its third level, however few facilities it holds — the
- * accordion is the quickest route to a specific facility on a phone. Tapping the
- * city name itself follows `NavCity.href`: the facility's landing page when the
- * city holds one, the city page when it holds several.
+ * TWO LEVELS ONLY: state › city. A city does not expand to its facilities — it
+ * is a link, and tapping it follows `NavCity.href`, which is already the right
+ * destination either way: the facility's landing page when the city holds one,
+ * the city page when it holds several. A third tier of accordions inside a
+ * drawer that is itself inside an accordion buries the thing being looked for
+ * behind three taps, and the city page lists the same facilities on arrival.
  */
 function locationTreeToMenu(tree: NavState[]): NavMenuItem[] {
   return [
@@ -204,21 +206,23 @@ function locationTreeToMenu(tree: NavState[]): NavMenuItem[] {
     ...tree.map((state) => ({
       label: state.label,
       href: state.href,
+      // No `children`: a city is a leaf here, so the row renders as a link
+      // rather than a third dropdown. city.properties is still read by the
+      // desktop mega menu, which has the room for the extra tier.
       children: state.cities.map((city) => ({
         label: city.label,
         href: city.href,
-        // EVERY city expands to its facilities, including a city holding just
-        // one — the levels mean the same thing everywhere, state › city ›
-        // facility, and the single facility's row is the shorter tap of the two
-        // routes to the same page (`city.href` shortcuts there as well).
-        children: city.properties.map((prop) => ({ label: prop.label, href: prop.href })),
       })),
     })),
   ];
 }
 
-/** Build the default nav, injecting Irvine + its "5281 California" facility
- *  under Find Storage › California. */
+/** Build the default nav, injecting Irvine under Find Storage › California.
+ *
+ *  Irvine is a LEAF, matching locationTreeToMenu above — the drawer is two
+ *  levels throughout, so the "5281 California" tier it used to nest is gone.
+ *  Its own href still comes from forceHardcodedLinks, which pins any row
+ *  labelled "Irvine" to IRVINE_URL whatever this sets. */
 function buildDefaultLinks(): NavLink[] {
   const findStorageMenu: NavMenuItem[] = FIND_STORAGE_MENU.map((state) =>
     state.label === 'California'
@@ -226,11 +230,7 @@ function buildDefaultLinks(): NavLink[] {
           ...state,
           children: [
             ...(state.children ?? []),
-            {
-              label: IRVINE_LABEL,
-              href: IRVINE_URL,
-              children: [{ label: FACILITY_LABEL, href: FACILITY_URL }],
-            },
+            { label: IRVINE_LABEL, href: IRVINE_URL },
           ],
         }
       : state,
@@ -386,6 +386,22 @@ export function NavigationBar({
   const logoSrc = imageUrl(logoImage) || (logoUrl ?? '').trim() || storelocalLogo;
 
   const [menuOpen, setMenuOpen] = useState(false);
+  /* Wheel over the overlay must not scroll the page behind it. touch-action
+     handles the finger (see .nav-mm-overlay) but there is no CSS equivalent
+     for a wheel, and React attaches its own wheel listener PASSIVELY — so
+     preventDefault has to come from a native non-passive one. Same shape as
+     the rental flow's scrim.
+     Deliberately not the body-overflow lock the other modals use: this bar is
+     position: sticky, and an overflow-hidden ancestor would take away the
+     scrollport it sticks against. */
+  const mmOverlayRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = mmOverlayRef.current;
+    if (!menuOpen || !el) return undefined;
+    const stop = (e: WheelEvent) => e.preventDefault();
+    el.addEventListener('wheel', stop, { passive: false });
+    return () => el.removeEventListener('wheel', stop);
+  }, [menuOpen]);
   // Desktop "Find Storage" mega menu. Click-to-open: it holds three columns and a
   // scroll region, which a hover panel loses the moment the pointer clips a gap.
   const [megaOpen, setMegaOpen] = useState(false);
@@ -823,7 +839,7 @@ export function NavigationBar({
       {/* Mobile slide-out menu (hamburger). Always mounted so it animates both
           in and out; `is-open` drives the slide + overlay fade. */}
       <div className={`nav-mobile-menu${menuOpen ? ' is-open' : ''}`} role="dialog" aria-modal="true" aria-hidden={!menuOpen}>
-        <div className="nav-mm-overlay" onClick={() => setMenuOpen(false)} />
+        <div className="nav-mm-overlay" ref={mmOverlayRef} onClick={() => setMenuOpen(false)} />
         <div className="nav-mm-panel">
           <div className="nav-mm-header">
             <a className="nav-mm-logo" href={homeLink} aria-label="Home">

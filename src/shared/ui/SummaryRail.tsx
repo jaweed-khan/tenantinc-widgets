@@ -44,6 +44,10 @@ export interface SummaryRailProps {
   holdRemaining?: number;
   /** Show the payment-method marks (default true). */
   showPayments?: boolean;
+  /** Replaces the image hero outright. The rental flow's mobile sheet swaps it
+   *  for a logo-and-contact row; anything that does not pass this keeps the
+   *  photo with the name, address and phone laid over it. */
+  heroSlot?: React.ReactNode;
   /** The money breakdown block. */
   children?: React.ReactNode;
 }
@@ -67,6 +71,7 @@ export function SummaryRail({
   promo,
   holdRemaining,
   showPayments = true,
+  heroSlot,
   children,
 }: SummaryRailProps) {
   return (
@@ -77,6 +82,7 @@ export function SummaryRail({
         </div>
       )}
 
+      {heroSlot ?? (
       <div className="ts-card-hero">
         {imageUrl
           ? <img className="ts-card-hero-img" src={imageUrl} alt={name ?? 'Storage facility'} onError={onImgError} />
@@ -98,6 +104,7 @@ export function SummaryRail({
           )}
         </div>
       </div>
+      )}
 
       <div className="ts-card-body">
         <div className="ts-card-top">

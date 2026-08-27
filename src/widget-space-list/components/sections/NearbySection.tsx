@@ -9,7 +9,8 @@ import {
   fetchPropertySpaces,
   formatDistance,
 } from '@shared/nearbyProperties';
-import { useSwipe } from '@shared/useSwipe';
+import { useCarousel, usePrefersReducedMotion } from '@shared/useCarousel';
+import { CarouselDots } from '@shared/CarouselDots';
 import { NearbyMap, type MapPoint } from '@shared/NearbyMap';
 import cfg from '../../config.json';
 import { resolveCompanyIdFromSources } from '@shared/companySource';
@@ -242,7 +243,6 @@ export function NearbySection() {
   // property that isn't in the list and exclude nothing.
   const currentPropertyId = usePropertyId();
   const [view, setView] = useState<ViewMode>('list');
-  const [page, setPage] = useState(0);
 
   // null = still loading; [] = loaded but nothing nearby.
   const [apiProps, setApiProps] = useState<NearbyProperty[] | null>(null);
@@ -348,13 +348,11 @@ export function NearbySection() {
   /* The header badge is counted in SectionAccordion, not here: this component
      is unmounted while the section is closed, so anything it reported would
      vanish the moment somebody collapsed it. */
-  const safePage = Math.min(page, total - 1);
-  const property = properties[safePage];
-
-  const swipe = useSwipe({
-    onSwipeLeft: () => setPage(Math.min(total - 1, safePage + 1)),
-    onSwipeRight: () => setPage(Math.max(0, safePage - 1)),
-  });
+  // One card at a time, dragged with the finger — same shared hook the blog
+  // listing uses, so the feel and the 6-dot cap stay identical across widgets.
+  const carousel = useCarousel({ count: total, perView: 1, draggable: true });
+  const reduceMotion = usePrefersReducedMotion();
+  const safePage = carousel.index;
 
   // Map pins from the live nearby list (price = cheapest starting rate).
   const mapPoints: MapPoint[] = (apiProps ?? []).map((p, i) => ({
@@ -382,10 +380,7 @@ export function NearbySection() {
       {/* Swipe pages the cards, so it is list-view only too: on the map it would
           be invisible navigation with no dots to reflect it, and it would fight
           the map's own drag-to-pan. */}
-      <div
-        className={`sl-nb2-content${view === 'list' ? '' : ' sl-nb2-content--no-pager'}`}
-        {...(view === 'list' ? swipe.handlers : {})}
-      >
+      <div className={`sl-nb2-content${view === 'list' ? '' : ' sl-nb2-content--no-pager'}`}>
         {loading && view === 'list' ? (
           <SkeletonCard />
         ) : view === 'map' ? (
@@ -397,7 +392,33 @@ export function NearbySection() {
             </div>
           )
         ) : (
-          <PropertyCard p={property} index={safePage} />
+          /* Every property renders once and one transform slides the row; the
+             window clips the rest. Drag handlers live on the window so a swipe
+             anywhere over the card moves it. List view only — on the map a drag
+             would fight the map's own pan. */
+          <div className="sl-nb2-track-window" {...carousel.handlers}>
+            <div
+              className="sl-nb2-track"
+              style={{
+                transform: `translateX(calc(${(carousel.offsetPct / 100).toFixed(6)} * 100%))`,
+                transition:
+                  reduceMotion || carousel.dragging
+                    ? 'none'
+                    : 'transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1)',
+              }}
+            >
+              {properties.map((p, i) => (
+                <div
+                  className="sl-nb2-track-item"
+                  key={p.id ?? i}
+                  {...(i === safePage ? {} : { inert: '' as unknown as boolean })}
+                  aria-hidden={i === safePage ? undefined : true}
+                >
+                  <PropertyCard p={p} index={i} />
+                </div>
+              ))}
+            </div>
+          </div>
         )}
       </div>
 
@@ -407,13 +428,19 @@ export function NearbySection() {
           cards jumping when the count arrives. */}
       {view === 'list' && (
         <div className="sl-nb2-pagination" style={loading ? { visibility: 'hidden' } : undefined}>
-          <button className="sl-nb2-arrow" onClick={() => setPage(Math.max(0, safePage - 1))} disabled={safePage === 0}>
+          <button className="sl-nb2-arrow" onClick={carousel.prev} disabled={!carousel.canPrev} aria-label="Previous property">
             <CarouselChevron dir="left" />
           </button>
-          {properties.map((_, i) => (
-            <button key={i} className={`sl-nb2-dot${i === safePage ? ' active' : ''}`} onClick={() => setPage(i)} />
-          ))}
-          <button className="sl-nb2-arrow" onClick={() => setPage(Math.min(total - 1, safePage + 1))} disabled={safePage === total - 1}>
+          {/* Capped at 6 with the window sliding — a company with 20 nearby
+              properties must not print 20 dots. */}
+          <CarouselDots
+            count={total}
+            active={safePage}
+            onPick={carousel.goTo}
+            dotClass="sl-nb2-dot"
+            label="Go to nearby property {n}"
+          />
+          <button className="sl-nb2-arrow" onClick={carousel.next} disabled={!carousel.canNext} aria-label="Next property">
             <CarouselChevron dir="right" />
           </button>
         </div>

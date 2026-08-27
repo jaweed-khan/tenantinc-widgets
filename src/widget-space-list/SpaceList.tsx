@@ -124,11 +124,38 @@ export function SpaceList({
   // (order 20 vs 10). Viewport query rather than the container width above,
   // because it has to agree with #03 about what "mobile" means.
   const isMobileViewport = useMediaQuery(MOBILE_STICKY_QUERY);
+
+  /* A sticky slot only watches its START sentinel, so once the bar pinned it
+     stayed pinned — over whatever Duda section came after this widget. This
+     watches the listing's END and switches the slot off when it goes by, which
+     unpins the bar, releases its slot and clears the frozen placeholder height
+     (see the `enabled` branch in useStickySlot). Scrolling back up re-arms it,
+     because the start sentinel is observed again the moment it is re-enabled. */
+  const [pastListing, setPastListing] = useState(false);
+  const listingEndRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = listingEndRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return undefined;
+    const io = new IntersectionObserver(
+      ([e]) => {
+        // Past only when the marker has gone ABOVE the line — the same
+        // direction test the stack itself makes. Below the fold it is also
+        // "not intersecting", which would read as past on first paint.
+        const rootTop = e.rootBounds?.top ?? 0;
+        setPastListing(!e.isIntersecting && e.boundingClientRect.top <= rootTop);
+      },
+      // The bar's own line, so it lets go exactly where it would have sat.
+      { rootMargin: `-${stickyOffsetTop}px 0px 0px 0px`, threshold: 0 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [stickyOffsetTop]);
+
   const filterSticky = useStickySlot({
     // Per instance: two space lists on one page must not share a slot.
     id: `sl-filter-bar-${elementId || 'default'}`,
     order: 20,
-    enabled: stickyFilterBar && isMobileViewport && !inEditor,
+    enabled: stickyFilterBar && isMobileViewport && !inEditor && !pastListing,
     offsetTop: stickyOffsetTop,
     // `sl-wrapper` comes along so the bar's existing scoped CSS still matches
     // once it's portaled out of the widget's tree.
@@ -628,6 +655,11 @@ export function SpaceList({
               <RichText value={activeFeature.details} className="sl-feature-details-body" />
             </section>
           )}
+          {/* End of the listing — where the filter bar stops being sticky.
+              Same zero-box sentinel class as the start marker: absolutely
+              positioned with auto offsets, so it keeps its static position in
+              this flex column without adding a 20px gap to it. */}
+          <div ref={listingEndRef} className="sl-sticky-sentinel" />
         </main>
         {showSideAccordions && apLocation === 'right' && sectionPanel}
       </div>

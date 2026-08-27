@@ -4,7 +4,8 @@ import { ShareIcon, ChevronRight, SOCIALS } from './icons';
 import { BLOG_IMAGES, cover } from '@shared/demoImages';
 import { hasCollectionsApi } from '@shared/dudaCollections';
 import { fetchBlogPosts, type BlogPostData } from '@shared/blogPosts';
-import { useSwipe } from '@shared/useSwipe';
+import { useCarousel, usePrefersReducedMotion } from '@shared/useCarousel';
+import { CarouselDots } from '@shared/CarouselDots';
 import { absolutePostUrl, shareTargets, type SocialProfiles } from '@shared/shareLinks';
 import { useSocialProfiles } from '@shared/useSocialProfiles';
 
@@ -19,6 +20,13 @@ const DEMO_POSTS: BlogPostData[] = [
   { id: 'b2', title: '5 Tips for Packing a Storage Unit Efficiently', author: 'Storage Outlet', date: 'Mar 10, 2026 @ 1:15pm', timestamp: 3, excerpt: 'Make the most of every square foot. These simple packing strategies help you fit more and keep your belongings easy to reach.', image: BLOG_IMAGES[1], href: '/blogs/packing-a-storage-unit', slug: 'packing-a-storage-unit' },
   { id: 'b3', title: 'How to Choose the Right Storage Unit Size', author: 'Storage Outlet', date: 'Mar 4, 2026 @ 9:00am', timestamp: 2, excerpt: 'From lockers to large drive-up units, picking the right size saves money and hassle. Our guide breaks down what fits where.', image: BLOG_IMAGES[2], href: '/blogs/choosing-a-unit-size', slug: 'choosing-a-unit-size' },
   { id: 'b4', title: 'Climate-Controlled Storage: Is It Worth It?', author: 'Storage Outlet', date: 'Feb 26, 2026 @ 11:45am', timestamp: 1, excerpt: "Temperature swings can damage furniture, electronics, and documents. Here's when climate control is worth the upgrade.", image: BLOG_IMAGES[3], href: '/blogs/climate-controlled-storage', slug: 'climate-controlled-storage' },
+  // Four more than the Figma frame shows, so the harness exercises what a real
+  // collection does: the carousel steps by one, so 8 posts is 6 desktop stops —
+  // enough to watch the slide repeat and the dot window move.
+  { id: 'b5', title: 'Moving House? A Storage Unit Buys You Breathing Room', author: 'Storage Outlet', date: 'Feb 19, 2026 @ 3:20pm', timestamp: 5, excerpt: 'Completion dates rarely line up. Short-term storage bridges the gap between moving out and moving in without the panic.', image: BLOG_IMAGES[4], href: '/blogs/moving-house-storage', slug: 'moving-house-storage' },
+  { id: 'b6', title: 'Storing Seasonal Gear Without Losing the Garage', author: 'Storage Outlet', date: 'Feb 11, 2026 @ 10:05am', timestamp: 6, excerpt: 'Skis in summer, patio furniture in winter. Rotating seasonal kit through a small unit keeps the garage usable year-round.', image: BLOG_IMAGES[5], href: '/blogs/seasonal-gear-storage', slug: 'seasonal-gear-storage' },
+  { id: 'b7', title: 'What You Can (and Cannot) Keep in a Storage Unit', author: 'Storage Outlet', date: 'Feb 3, 2026 @ 8:40am', timestamp: 7, excerpt: 'Most things are fine. Perishables, plants and anything flammable are not. A quick rundown before you start packing.', image: BLOG_IMAGES[0], href: '/blogs/what-you-can-store', slug: 'what-you-can-store' },
+  { id: 'b8', title: 'Small Business Storage: Stock, Records and Equipment', author: 'Storage Outlet', date: 'Jan 28, 2026 @ 2:15pm', timestamp: 8, excerpt: 'Cheaper than extra office space and easier to scale. How local businesses use self storage as an overflow stockroom.', image: BLOG_IMAGES[1], href: '/blogs/small-business-storage', slug: 'small-business-storage' },
 ];
 
 const CARDS_PER_PAGE = 3;
@@ -192,13 +200,94 @@ function MobileSkeleton({ title }: { title: React.ReactNode }) {
   );
 }
 
-function Dots({ count, active, onPick }: { count: number; active: number; onPick: (i: number) => void }) {
+/**
+ * The sliding strip both frames share.
+ *
+ * Every post is rendered once and a single transform moves the row; `perView`
+ * sets each item's width, so the same track is a 3-up on desktop and a 1-up on
+ * mobile. Overflow is hidden by .blog-track-window, so the cards outside the
+ * view are present (and pre-loaded) but clipped.
+ *
+ * `index` is passed only to keep the clipped cards out of the tab order — they
+ * are in the DOM, so without `inert` a keyboard user tabs through offscreen
+ * links and the strip appears to scroll on its own.
+ */
+function Track({
+  posts,
+  profiles,
+  perView,
+  index,
+  offsetPct,
+  animate,
+  handlers,
+  onCardClickCapture,
+}: {
+  posts: BlogPostData[];
+  profiles: SocialProfiles;
+  perView: number;
+  index: number;
+  offsetPct: number;
+  animate: boolean;
+  handlers: React.HTMLAttributes<HTMLElement>;
+  onCardClickCapture?: (e: React.MouseEvent) => void;
+}) {
   return (
-    <>
-      {Array.from({ length: count }).map((_, i) => (
-        <button key={i} className={`blog-dot${i === active ? ' active' : ''}`} onClick={() => onPick(i)} aria-label={`Page ${i + 1}`} />
-      ))}
-    </>
+    <div
+      className="blog-track-window"
+      // Drives both the item width and the transform's step — see the CSS.
+      style={{ '--blog-per-view': perView } as React.CSSProperties}
+      {...handlers}
+      onClickCapture={onCardClickCapture}
+    >
+      <div
+        className="blog-track"
+        style={{
+          // Deliberately NOT a percentage. A translateX percentage resolves
+          // against the element's own width, and this track's width is set by
+          // flex against the WINDOW (`flex: 0 0 calc(100%/perView)` makes the
+          // items size off the window, leaving the track itself window-width
+          // however many items it holds). Percentages therefore under-shift and
+          // the last card never reaches the right edge.
+          //
+          // One step is one item = 1/perView of the window, and `--blog-step` is
+          // exactly that, so the shift is expressed in real pixels.
+          //
+          // The offset is divided by 100 in JS rather than inside the calc():
+          // `calc(-500 * var(--blog-step) / 100)` multiplies a <number> by a
+          // <percentage>, which browsers resolve inconsistently — it silently
+          // came out one step short. A plain decimal multiplier is unambiguous.
+          transform: `translateX(calc(${(offsetPct / 100).toFixed(6)} * var(--blog-step)))`,
+          transition: animate ? 'transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1)' : 'none',
+        }}
+      >
+        {posts.map((post, i) => {
+          const visible = i >= index && i < index + perView;
+          return (
+            <div
+              // `is-offscreen` drops the card's shadow while it is outside the
+              // window. The window clips X but leaves Y visible (so a card's own
+              // shadow can show), and with no gap between items on mobile the
+              // NEXT card's shadow reached back across the clip seam and drew a
+              // hard line down the card on screen. A card nobody can see has no
+              // reason to cast one — see the rule in the CSS.
+              className={`blog-track-item${visible ? '' : ' is-offscreen'}`}
+              key={post.id}
+              // Sized off the SAME variable the transform steps by, so the card
+              // pitch and the slide distance can never disagree.
+              style={{ flex: '0 0 var(--blog-step)' }}
+              // Clipped cards keep their links focusable, so tabbing would walk
+              // into a card nobody can see. `inert` takes them out of both the
+              // tab order and the accessibility tree in one go; the aria-hidden
+              // mirror covers browsers that don't support it yet.
+              {...(visible ? {} : { inert: '' as unknown as boolean })}
+              aria-hidden={visible ? undefined : true}
+            >
+              <BlogCard post={post} profiles={profiles} />
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -228,8 +317,12 @@ export function BlogsListing({
   const [posts, setPosts] = useState<BlogPostData[]>([]);
   const [loading, setLoading] = useState(true);
   const [pastDelay, setPastDelay] = useState(false);
-  const [page, setPage] = useState(0);
-  const [mobileIdx, setMobileIdx] = useState(0);
+  // Two independent carousels — the frames are mutually exclusive in CSS
+  // (.blog-desktop is display:none below 900px), so their positions never need
+  // to agree and keeping them apart avoids a resize jumping the reader.
+  const desktop = useCarousel({ count: posts.length, perView: CARDS_PER_PAGE });
+  const mobile = useCarousel({ count: posts.length, perView: 1, draggable: true });
+  const reduceMotion = usePrefersReducedMotion();
 
   // Brand profile links for the three glyphs that can't carry a share URL.
   const profiles = useSocialProfiles('#12');
@@ -254,16 +347,10 @@ export function BlogsListing({
     return () => { cancelled = true; clearTimeout(timer); };
   }, [collection, blogBasePath]);
 
-  // Clamp rather than store-and-correct, so a shrinking post list can't leave us
-  // on a page that no longer exists.
-  const totalPages = Math.max(1, Math.ceil(posts.length / CARDS_PER_PAGE));
-  const current = Math.min(page, totalPages - 1);
-  const pagePosts = posts.slice(current * CARDS_PER_PAGE, current * CARDS_PER_PAGE + CARDS_PER_PAGE);
-  const mobileCurrent = Math.min(mobileIdx, Math.max(0, posts.length - 1));
-  const mobileSwipe = useSwipe({
-    onSwipeLeft: () => setMobileIdx((i) => Math.min(posts.length - 1, i + 1)),
-    onSwipeRight: () => setMobileIdx((i) => Math.max(0, i - 1)),
-  });
+  // Positions, not pages: the arrows step one card, so a 9-post collection has
+  // 7 desktop positions (9 - 3) rather than 3 pages. The dot row is windowed to
+  // MAX_DOTS, so the count no longer bounds how wide the strip can get.
+  const desktopStops = desktop.maxIndex + 1;
 
   const headingBlock = (
     <div className="blog-heading-block">
@@ -308,19 +395,25 @@ export function BlogsListing({
       <div className="blog-desktop">
         {headingBlock}
 
-        <div className="blog-grid">
-          {pagePosts.map((post) => (
-            <BlogCard key={post.id} post={post} profiles={profiles} />
-          ))}
-        </div>
+        <Track
+          posts={posts}
+          profiles={profiles}
+          perView={CARDS_PER_PAGE}
+          index={desktop.index}
+          offsetPct={desktop.offsetPct}
+          animate={!reduceMotion}
+          handlers={{}}
+        />
 
-        {totalPages > 1 && (
+        {desktopStops > 1 && (
           <div className="blog-pagination">
-            <button className="blog-page-btn blog-page-btn-prev" onClick={() => setPage(Math.max(0, current - 1))} disabled={current === 0} aria-label="Previous">
+            {/* Disabled at each end rather than hidden: a control that vanishes
+                moves the dots row sideways as you reach the last card. */}
+            <button className="blog-page-btn blog-page-btn-prev" onClick={desktop.prev} disabled={!desktop.canPrev} aria-label="Previous">
               <ChevronRight size={40} />
             </button>
-            <Dots count={totalPages} active={current} onPick={setPage} />
-            <button className="blog-page-btn" onClick={() => setPage(Math.min(totalPages - 1, current + 1))} disabled={current === totalPages - 1} aria-label="Next">
+            <CarouselDots count={desktopStops} active={desktop.index} onPick={desktop.goTo} dotClass="blog-dot" label="Go to post {n}" />
+            <button className="blog-page-btn" onClick={desktop.next} disabled={!desktop.canNext} aria-label="Next">
               <ChevronRight size={40} />
             </button>
           </div>
@@ -330,16 +423,36 @@ export function BlogsListing({
       {/* ── Mobile ──────────────────────────────────────────────────────── */}
       <div className="blog-mobile">
         {mobileTitleBlock}
-        {/* Dots indicate position, swiping moves — no arrows in this view. */}
-        <div {...mobileSwipe.handlers}>
-          <BlogCard key={`m-${mobileCurrent}`} post={posts[mobileCurrent]} profiles={profiles} />
-        </div>
+        {/* Dots indicate position, dragging moves — no arrows in this view. */}
+        <Track
+          posts={posts}
+          profiles={profiles}
+          perView={1}
+          index={mobile.index}
+          offsetPct={mobile.offsetPct}
+          // A tween during the drag would lag the finger; only the release snap
+          // is animated.
+          animate={!reduceMotion && !mobile.dragging}
+          handlers={mobile.handlers}
+          // A drag ends in a click on whichever card is under the finger, which
+          // would open that post. Swallow it at the capture phase, before the
+          // card's own link sees it.
+          onCardClickCapture={(e) => {
+            if (mobile.didDrag.current) {
+              mobile.didDrag.current = false;
+              e.preventDefault();
+              e.stopPropagation();
+            }
+          }}
+        />
         {/* The strip renders even for a single post (when there are no dots to
             show): its height is reserved in CSS, and dropping the row outright
             would make a one-post collection 40px shorter than the skeleton that
             stood in for it. */}
         <div className="blog-pagination blog-pagination-dots">
-          {posts.length > 1 && <Dots count={posts.length} active={mobileCurrent} onPick={setMobileIdx} />}
+          {posts.length > 1 && (
+            <CarouselDots count={posts.length} active={mobile.index} onPick={mobile.goTo} dotClass="blog-dot" label="Go to post {n}" />
+          )}
         </div>
       </div>
 

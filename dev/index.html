@@ -109,6 +109,23 @@
   <!-- ── widget-utility-bar ──────────────────────────────────────────── -->
   <div class="widget-section">
     <h2>widget-utility-bar (#01)</h2>
+    <div class="controls">
+      <div class="controls-group">
+        <label>Bar Colour:
+          <select id="ub-bar-colour" onchange="reinitUtilityBar()">
+            <option value="black">Black</option>
+            <option value="primary">Primary (--color_1)</option>
+            <option value="cta">CTA (--color_2)</option>
+          </select>
+        </label>
+        <label>Text Colour:
+          <select id="ub-text-colour" onchange="reinitUtilityBar()">
+            <option value="white">White</option>
+            <option value="black">Black</option>
+          </select>
+        </label>
+      </div>
+    </div>
     <div id="utility-bar-container" class="widget-container"></div>
   </div>
 
@@ -1234,7 +1251,20 @@
     });
 
     require(['/dist/widget-utility-bar.js'], function (widget) {
-      widget.init({ container: document.getElementById('utility-bar-container'), props: { inEditor: true } });
+      // The two colour radios Duda exposes, so both can be tried here. The
+      // theme variables they read are undefined in the harness, so `primary`
+      // and `cta` show the CSS fallbacks rather than a real site's brand.
+      window.reinitUtilityBar = function () {
+        widget.init({
+          container: document.getElementById('utility-bar-container'),
+          props: {
+            inEditor: true,
+            utilitybarColour: document.getElementById('ub-bar-colour').value,
+            textColour: document.getElementById('ub-text-colour').value,
+          },
+        });
+      };
+      window.reinitUtilityBar();
     });
     require(['/dist/widget-navigation-bar.js'], function (widget) {
       navigationBarWidget = widget;

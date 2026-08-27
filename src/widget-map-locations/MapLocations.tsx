@@ -152,6 +152,7 @@ function PropertyCard({
   companyId,
   propertyBasePath,
   onActivate,
+  onSelect,
 }: {
   facility: CityFacility;
   index: number;
@@ -169,7 +170,12 @@ function PropertyCard({
   companyId?: string;
   /** Where the property pages live, e.g. '/storage-units'. */
   propertyBasePath: string;
+  /** Pointer entered the card — raises its marker. Hover, not intent. */
   onActivate: () => void;
+  /** The card was CLICKED, which is intent: the visitor has moved on to this
+   *  property, so a bubble still open over another one is stale. Separate from
+   *  onActivate because hovering down the list must not dismiss it. */
+  onSelect: () => void;
 }) {
   // Three, per the design; "See All Spaces" covers the rest. A live property
   // has 26–38 tiers, so this is the difference between a card and a wall.
@@ -190,7 +196,7 @@ function PropertyCard({
        ref map: the cards are rendered by a child component from a list that
        re-orders on sort, and threading refs back up for that is more moving
        parts than one lookup. */
-    <article className={cls} data-facility-id={facility.id} onMouseEnter={onActivate}>
+    <article className={cls} data-facility-id={facility.id} onMouseEnter={onActivate} onClick={onSelect}>
       {/* Photo header — image, dark scrim, distance, and the property details */}
       <div className="ml-card-head">
         <img className="ml-card-photo" src={PROPERTY_IMAGES[index % PROPERTY_IMAGES.length]} alt="" />
@@ -1217,6 +1223,14 @@ export function MapLocations({
                 companyId={resolvedCompanyId ?? undefined}
                 propertyBasePath={normalisedPropertyBase}
                 onActivate={() => setActiveId(f.id)}
+                onSelect={() => {
+                  setActiveId(f.id);
+                  /* Close a bubble belonging to a DIFFERENT property. Clicking
+                     the card of the one already open leaves it alone — it is
+                     the same facility, so the bubble is still about what the
+                     visitor is looking at. */
+                  setOpenId((cur) => (cur && cur !== f.id ? null : cur));
+                }}
               />
             ))}
             {/* Nothing to show. The two cases read very differently to a

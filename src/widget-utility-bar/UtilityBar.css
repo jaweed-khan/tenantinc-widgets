@@ -21,9 +21,42 @@
 
 .ub-bar {
   width: 100%;
+  /* The tone classes below set this; the literal stays as the value an
+     unconfigured or unrecognised bar lands on. */
   background: #000;
   box-shadow: inset 0px -1px 0px 0px rgba(142, 142, 143, 0.15);
 }
+
+/* Bar colour (Duda content menu: utilitybarColour). Three tones, and every
+   one of them keeps the white message and the white close mark, so contrast
+   does not depend on which the editor picks.
+   The two brand tones read the Duda THEME variables rather than literals, so a
+   site rebrand moves the bar with everything else and needs no rebuild:
+   --color_1 is the theme's primary and --color_2 its CTA.
+
+   --color_2 DIRECTLY, not the kit's --hb-cta which wraps it. This widget
+   imports @shared/ui/icons rather than the barrel — that is what keeps 45KB of
+   unused kit out of the bundle — so tokens.css never loads here and --hb-cta
+   is undefined. It would have silently resolved to its fallback on every site,
+   making "CTA" a fixed green whatever the brand.
+
+   The fallbacks are what shows in the dev harness and the Duda editor, where
+   the theme variables are not defined either. */
+.ub-bar--black { background: #000; }
+.ub-bar--primary { background: var(--color_1, #f45f30); }
+.ub-bar--cta { background: var(--color_2, #509e2f); }
+
+/* Text colour (Duda content menu: textColour). White is the base every rule
+   below already sets, so only black needs saying — (0,2,0) against those
+   (0,1,0) rules, which is what lets one block cover all three marks.
+   #101318 rather than pure #000: it is the design system's near-black, the
+   same one every other widget uses for type.
+   The TOOLTIP is deliberately absent. It is a dark floating box with its own
+   palette, not part of the bar's surface, so it stays white-on-black whichever
+   way this is set. */
+.ub-bar--text-black .ub-message,
+.ub-bar--text-black .ub-info,
+.ub-bar--text-black .ub-close { color: #101318; }
 
 .ub-bar--block {
   position: relative;

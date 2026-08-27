@@ -440,12 +440,6 @@ export function Step2({
           <FieldAbove label={business ? 'Business Email' : 'Email'} required value={email} onChange={setEmail} type="email" error={bad('email')} />
           <FieldAbove label={business ? 'Business Phone' : 'Phone Number'} required value={phone} onChange={setPhone} type="tel" phoneCountry="US" error={bad('phone')} />
         </div>
-        {/* Where step 2 comes to rest. The shopper filled their contact details
-            in step 1, so landing on them again is a screen of finished work;
-            the protection plan below is the decision actually being asked for.
-            Marked here rather than measured from the top of the form, so it
-            follows the field if the layout changes. */}
-        <span data-rf2-rest aria-hidden="true" />
         {business ? (
           <FieldAbove label="Business Name" required value={bizName} onChange={setBizName} error={bad('bizName')} />
         ) : (
@@ -454,6 +448,16 @@ export function Step2({
             <FieldAbove label="Last Name" required value={last} onChange={setLast} error={bad('last')} />
           </div>
         )}
+        {/* Where step 2 comes to rest. The shopper filled their contact details
+            in step 1, so landing on them again is a screen of finished work.
+
+            BELOW the name row, not above it: the scroll offsets back up by the
+            sticky header's height, so whatever sits just before this marker is
+            what ends up under the header. Above the row that was the email
+            pair; here it is the name pair. Marked in the markup rather than
+            measured from the top of the form, so it follows the fields if the
+            layout changes. */}
+        <span data-rf2-rest aria-hidden="true" />
         <button type="button" className="rf2-movein rf2-movein--valid" onClick={onEditDate}>
           <span className="rf2-movein-text">
             <span className="rf2-movein-label">Move-in Date<span className="rf-req">*</span></span>

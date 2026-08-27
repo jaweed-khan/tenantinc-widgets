@@ -155,7 +155,7 @@ const TIER_SLOTS: TierKey[] = ['good', 'better', 'best'];
 // Scarcity threshold — matches the Space List's default urgencyThreshold.
 const URGENCY_THRESHOLD = 5;
 
-function buildTierData(data: import('./api').ValueTierData, facilityHours?: string, vacant?: number): TierData {
+function buildTierData(data: import('./api').ValueTierData, facilityHours?: string, vacant?: number, enablePromoLogic = true): TierData {
   // Assign each offer to its OWN authoritative tier slot — never relocate an
   // offer between keys; the key is its selection + rental-flow handoff identity.
   const bySlot: Partial<Record<TierKey, import('./api').ValueTierBundle>> = {};
@@ -180,9 +180,9 @@ function buildTierData(data: import('./api').ValueTierData, facilityHours?: stri
       tagline: TAGLINES[k],
       price: b.price,
       hours: b.features.some((f) => HOURS_24_RE.test(f)) ? '24 Hours' : facilityHours ?? '',
-      promoRate: b.promoRate,
+      promoRate: enablePromoLogic ? b.promoRate : undefined,
       summary: b.features[0] ?? TAGLINES[k],
-      promo: b.promo,
+      promo: enablePromoLogic ? b.promo : undefined,
       features: b.features.slice(0, 6),
       unitId: b.unitId,
     };
@@ -296,6 +296,8 @@ export interface TierSelectionProps {
   ctaLabel?: string;
   /** Show the quote-backed Pricing Details breakdown on desktop and mobile. */
   showPricingDetails?: boolean;
+  /** Match Space List's promotion-pricing toggle. Duda may pass booleans as strings. */
+  enablePromoLogic?: boolean | string;
   /** Where Select navigates (the rental-flow page). Carries
    *  ?size=&unitId=&tier=; same-origin only. Empty = inert. */
   rentUrl?: string;
@@ -424,6 +426,7 @@ export function TierSelection({
   defaultTier,
   ctaLabel = 'Select',
   showPricingDetails = true,
+  enablePromoLogic: enablePromoLogicRaw = true,
   rentUrl,
   inEditor = false,
   siteId,
@@ -446,6 +449,7 @@ export function TierSelection({
   const [modalFeeText, setModalFeeText] = useState<string | undefined>(undefined);
   const [modalShowPricingDetails, setModalShowPricingDetails] = useState<boolean | undefined>(undefined);
   const [modalShowUrgency, setModalShowUrgency] = useState<boolean | undefined>(undefined);
+  const [modalEnablePromoLogic, setModalEnablePromoLogic] = useState<boolean | undefined>(undefined);
   // Bumped on every open so reopening the SAME size still refetches (inventory
   // and pricing can change between opens).
   const [openGen, setOpenGen] = useState(0);
@@ -500,6 +504,11 @@ export function TierSelection({
   };
   const sizeProp = mode === 'modal' ? modalSize : (sizeRaw || urlParam('size'));
   const authoritativeGroupId = mode === 'modal' ? modalUnitGroupId : (unitGroupIdProp || urlParam('unitGroupId'));
+  const inlinePromoRaw = urlParam('enablePromoLogic') ?? enablePromoLogicRaw;
+  const inlinePromoEnabled = inlinePromoRaw === true || inlinePromoRaw === 'true';
+  const effectivePromoLogic = mode === 'modal'
+    ? (modalEnablePromoLogic ?? inlinePromoEnabled)
+    : inlinePromoEnabled;
 
   const cfgDefaults = React.useMemo(() => defaultContext(), []);
   const effectivePropertyId = resolvePropertyId({ propertyId: propertyIdProp || urlParam('propertyId') }, cfgDefaults.propertyId);
@@ -546,6 +555,7 @@ export function TierSelection({
       setModalFeeText(req.feeText);
       setModalShowPricingDetails(req.showPricingDetails);
       setModalShowUrgency(req.showUrgency);
+      setModalEnablePromoLogic(req.enablePromoLogic);
       setOpenGen((g) => g + 1);
       setModalOpen(true);
       return true; // accepted → acknowledge
@@ -570,7 +580,17 @@ export function TierSelection({
     if (!b) return;
     requested.current.add(key);
     setQuotes((prev) => ({ ...prev, [key]: { status: 'pending' } }));
-    fetchTierQuote(ctx, { unitId: b.unitId, rent: b.price, promotionIds: b.promotionIds, promoName: b.promo, timezone: tzRef.current })
+    // enablePromoLogic is presentation-only, matching Space List. Always send
+    // the offer's promotions so the authoritative move-in total remains
+    // accurate and checkout can apply every promotion the customer qualifies
+    // for, even when promotional price/copy is hidden in this widget.
+    fetchTierQuote(ctx, {
+      unitId: b.unitId,
+      rent: b.price,
+      promotionIds: b.promotionIds,
+      promoName: b.promo,
+      timezone: tzRef.current,
+    })
       .then((result) => setQuotes((prev) => ({ ...prev, [key]: result })));
   }, [ctx]);
 
@@ -668,7 +688,7 @@ export function TierSelection({
         // available bundle — defensive; treated as sold out.
         if (!tiers.value) { console.info('[TierSelection] all configured tiers sold out'); setStatus('soldout'); return; }
         const value = tiers.value;
-        setData({ ...buildTierData(value, property?.gateHours, tiers.vacant), property });
+        setData({ ...buildTierData(value, property?.gateHours, tiers.vacant, effectivePromoLogic), property });
         setStatus('live');
         bundlesRef.current = value.bundles;
         tzRef.current = property?.timezone;
@@ -695,7 +715,7 @@ export function TierSelection({
     // changes when a different card is clicked. The proxy's own ~15s offers
     // cache may still serve a very recent response — the uncached move-in quote
     // is the authoritative money figure.
-  }, [mode, inEditor, siteId, elementId, sizeProp, authoritativeGroupId, openGen, ctx, tierProp, defaultTier, effectiveCompanyId]);
+  }, [mode, inEditor, siteId, elementId, sizeProp, authoritativeGroupId, openGen, ctx, tierProp, defaultTier, effectiveCompanyId, effectivePromoLogic]);
 
   useEffect(() => {
     if (status === 'live' && variant === 'option1') ensureQuote(selected);
@@ -714,7 +734,7 @@ export function TierSelection({
   const headingMobile = headingMobileProp
     ?? (displaySize ? `Choose a ${displaySize} Option` : 'Choose an Option');
   const urgency = urgencyProp ?? data?.urgency ?? '';
-  const promo = promoProp ?? tier?.promo ?? '';
+  const promo = effectivePromoLogic ? (promoProp ?? tier?.promo ?? '') : '';
   const effectiveAdminFeeText = mode === 'modal'
     ? (modalFeeText ?? adminFeeText)
     : adminFeeText;

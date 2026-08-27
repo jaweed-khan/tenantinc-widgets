@@ -237,6 +237,7 @@ export function CtaButton({ unit, config, full }: { unit: Unit; config: WidgetCo
       feeText: config.showJunkFeeDisclaimer ? (config.junkFeeCopy || '') : '',
       showPricingDetails: config.showJunkFeeDisclaimer,
       showUrgency: config.showUrgencyMessage,
+      enablePromoLogic: config.enablePromoLogic,
     });
     if (handled) return;
     if (config.valueTiersPageUrl) {
@@ -245,6 +246,7 @@ export function CtaButton({ unit, config, full }: { unit: Unit; config: WidgetCo
         if (url.origin === window.location.origin) {
           url.searchParams.set('size', unit.dimensions);
           if (unit.unitGroupId) url.searchParams.set('unitGroupId', unit.unitGroupId);
+          url.searchParams.set('enablePromoLogic', config.enablePromoLogic ? 'true' : 'false');
           // Carry the ACTUAL property + company so the value-tiers page prices
           // the same unit group (critical on dynamic property pages).
           if (config.propertyId) url.searchParams.set('propertyId', config.propertyId);

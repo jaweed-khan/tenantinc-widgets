@@ -33,6 +33,9 @@ export interface TierOpenRequest {
   /** Sender's "show urgency" toggle. false ⇒ hide the modal's urgency line;
    *  omitted ⇒ the modal keeps its own behaviour. */
   showUrgency?: boolean;
+  /** Mirror Space List's presentation toggle. false hides promo pricing/copy;
+   *  it does not change promotion eligibility or checkout application. */
+  enablePromoLogic?: boolean;
 }
 
 /** True when the request looks well-formed enough to act on. */

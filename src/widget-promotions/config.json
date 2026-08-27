@@ -1,8 +1,8 @@
 {
-  "baseUrl": "https://edge.tenant.dev/api/v3",
-  "appId": "appbc35600a675841eea5893df84231789e",
-  "apiKey": "309365e7685b4b048d79dc7d29bd4f57",
-  "companyId": "QZxjPop2lA",
-  "propertyId": "nBmVbh63vV",
-  "spaceGroupId": "kjVGAUgLB5"
+  "baseUrl": "https://prod.edge.tenant.dev/api/v3",
+  "appId": "appc02fcbc01b5e41818669077c87c01e7f",
+  "apiKey": "81745bed92234945a81afde62604e4f8",
+  "companyId": "eMjRwyRBrZ",
+  "propertyId": "Y2wzzC8AYv",
+  "spaceGroupId": "lBNNYhA1xB"
 }

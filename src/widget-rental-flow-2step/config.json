@@ -1,10 +1,10 @@
 {
-  "baseUrl": "https://edge.tenant.dev/api/v3",
-  "appId": "appbc35600a675841eea5893df84231789e",
-  "apiKey": "309365e7685b4b048d79dc7d29bd4f57",
-  "companyId": "kQoBXA8vpn",
-  "propertyId": "OBZ5dhPmjZ",
-  "spaceGroupId": "7jP5qtVeBg",
+  "baseUrl": "https://prod.edge.tenant.dev/api/v3",
+  "appId": "appc02fcbc01b5e41818669077c87c01e7f",
+  "apiKey": "81745bed92234945a81afde62604e4f8",
+  "companyId": "eMjRwyRBrZ",
+  "propertyId": "Y2wzzC8AYv",
+  "spaceGroupId": "lBNNYhA1xB",
   "proxyBaseUrl": "",
   "enableDirectWrites": true,
   "gpPublicKey": "pkapi_cert_a3ujFfhmq3EPW8k0ZP"

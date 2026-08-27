@@ -18,7 +18,7 @@ import { PROPERTIES_COLLECTION } from './propertiesSource';
 
 /** The facility these widgets currently render for. Overridable per instance so
  *  a future per-page property only needs the prop threading, not a rewrite. */
-export const DEFAULT_PROPERTY_ID = 'nBmVbh63vV';
+export const DEFAULT_PROPERTY_ID = 'Y2wzzC8AYv';
 
 export interface PropertyContact {
   id: string;

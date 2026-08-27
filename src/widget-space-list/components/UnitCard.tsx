@@ -11,7 +11,10 @@ export function UnitCard({ unit, config }: { unit: Unit; config: WidgetConfig })
           <div className="sl-card-info">
             <div className="sl-unit-heading">
               <div className="sl-unit-title">{unit.dimensions}</div>
-              <div className="sl-unit-subtype">{unit.subtype}</div>
+              {/* Guarded like the other two cards: an empty subtype (no amenity
+                  and a generic group name) must take no vertical space rather
+                  than leaving an empty line under the size. */}
+              {unit.subtype && <div className="sl-unit-subtype">{unit.subtype}</div>}
             </div>
             <FeatureList features={unit.features} />
           </div>

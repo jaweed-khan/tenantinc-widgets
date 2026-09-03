@@ -1081,6 +1081,25 @@ export function NearbyLocations({
       active: p.id === apiProperties?.[Math.min(mobileIdx, apiProperties.length - 1)]?.id,
     }));
 
+  /* Where to centre the map.
+     `refLoc` when there is one — the visitor's own location, or the property
+     this page is about — because then the map should be about THEM.
+     Otherwise the middle of the pins. The map used to require refLoc and say
+     "Map unavailable" without it, which is wrong whenever there are locations
+     to show: refLoc is null on the common path for this widget, where
+     geolocation is declined and `propertyId` is unset (it is optional here, and
+     the list already handles its absence by dropping distances rather than
+     going blank). So the map was refusing to draw ten plottable properties for
+     want of a centre it could work out from the pins themselves.
+     NearbyMap's fitZoom then picks the largest zoom that fits them all, so a
+     portfolio spread across several states still frames correctly. */
+  const mapCenter = refLoc ?? (mapPoints.length
+    ? {
+      lat: mapPoints.reduce((t, p) => t + p.lat, 0) / mapPoints.length,
+      lng: mapPoints.reduce((t, p) => t + p.lng, 0) / mapPoints.length,
+    }
+    : null);
+
   return (
     <div className="nl-wrapper">
       {/* One announcement for the whole widget: the desktop and mobile frames are
@@ -1225,8 +1244,8 @@ export function NearbyLocations({
              was still in flight too, stating something false. Both cases produce
              refLoc === null, so the loading one has to be tested first. */
           <div className="nl-map"><span className="nl-skeleton-block nl-skeleton-map" /></div>
-        ) : refLoc && mapPoints.length ? (
-          <NearbyMap center={refLoc} points={mapPoints} className="nl-map" />
+        ) : mapCenter && mapPoints.length ? (
+          <NearbyMap center={mapCenter} points={mapPoints} className="nl-map" />
         ) : (
           <div className="nl-map"><span className="nl-map-selected">Map unavailable</span></div>
         )}

@@ -823,17 +823,22 @@
   gap: 16px;
 }
 
+/* PRIMARY here, not the CTA the rest of this widget's accents use. A discount
+   is a badge on the card, not something to press — the CTA colour is what tells
+   a shopper where the actions are, and spending it on a label competes with the
+   buttons. --color_1 with the theme's own primary fallback, so an unthemed
+   environment shows the two apart rather than one green on green. */
 .ml-promo {
   display: flex;
   align-items: center;
   gap: 4px;
   width: 100%;
   padding: 12px;
-  border: 2px dashed var(--color_2, #509e2f);
+  border: 2px dashed var(--color_1, #f45f30);
   border-radius: 8px;
   background: #fff;
   /* TagIcon inside draws in currentColor. */
-  color: var(--color_2, #509e2f);
+  color: var(--color_1, #f45f30);
 }
 
 .ml-promo-text {

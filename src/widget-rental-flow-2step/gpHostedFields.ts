@@ -32,10 +32,19 @@ import montserratWoff2 from './assets/montserrat-400-ascii.woff2';
 /** Officially Heartland-hosted; `hps.github.io` serves a byte-identical copy. */
 const LIB = 'https://api2.heartlandportico.com/SecureSubmit.v1/token/gp-1.0.0/globalpayments.js';
 
+interface IframeFieldLike {
+  /** Posts `ui:iframe-field:set-focus`; the frame answers by calling
+   *  `el.focus()` on its own input. The ONLY way to move the caret into a
+   *  hosted field — it is cross-origin, so nothing else reaches it. */
+  setFocus(): void;
+}
+
 interface UIFormLike {
   on(event: string, listener: (resp: unknown) => void): UIFormLike;
   ready(fn: () => void): void;
   dispose(): void;
+  /** Keyed by GP's own field names: 'card-number', 'card-expiration', … */
+  frames?: Record<string, IframeFieldLike | undefined>;
 }
 
 interface GlobalPaymentsApi {
@@ -248,7 +257,18 @@ const FIELD_STYLES: Record<string, Record<string, string> | string> = {
   },
 };
 
-export interface HostedCardHandle { dispose(): void }
+export interface HostedCardHandle {
+  dispose(): void;
+  /**
+   * Move the caret into one of the hosted cells, so the row can be typed
+   * straight through. Verified against gp-1.0.0: IframeField.prototype.setFocus
+   * posts `set-focus`, and the frame's handler is
+   * `document.getElementById(paymentFieldId).focus()`.
+   * A no-op if the frame is not there — a missing frame must never throw in
+   * the middle of someone typing.
+   */
+  focusField(field: 'number' | 'expiry'): void;
+}
 
 /**
  * Mount the hosted card fields. Resolves to null when hosted fields are not
@@ -273,7 +293,11 @@ export async function mountHostedCard(
            focus. Every parent-drawn version of this label got stuck on one
            edge or another. */
         'card-number': { target: opts.numberTarget, placeholder: 'Card Number' },
-        'card-expiration': { target: opts.expiryTarget, placeholder: 'MM / YYYY' },
+        /* MM / YY. The plain cell's label, its aria-label and its error copy
+           all say MM / YY and EXPIRY_DIGITS is 4, so the hosted placeholder was
+           the only thing asking for four year digits. GP's expiration validator
+           takes either, so this is the label agreeing with the rest. */
+        'card-expiration': { target: opts.expiryTarget, placeholder: 'MM / YY' },
         // GP will only tokenize from a gesture inside its own frame — the
         // form object exposes no programmatic equivalent — so this button
         // has to exist even though ours is the one the shopper sees.
@@ -349,7 +373,13 @@ export async function mountHostedCard(
       opts.onError(detail || 'The card could not be verified. Please check the details and try again.');
     });
 
-    return { dispose: () => { try { form.dispose(); } catch { /* already gone */ } } };
+    return {
+      dispose: () => { try { form.dispose(); } catch { /* already gone */ } },
+      focusField: (field) => {
+        const name = field === 'number' ? 'card-number' : 'card-expiration';
+        try { form.frames?.[name]?.setFocus(); } catch { /* frame gone */ }
+      },
+    };
   } catch (err) {
     console.warn('[gpHostedFields] could not mount hosted fields:', err);
     return null;

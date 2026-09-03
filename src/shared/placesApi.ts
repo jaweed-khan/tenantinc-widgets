@@ -57,9 +57,23 @@ export function newSessionToken(): string {
   }
 }
 
+/**
+ * Where a CUSTOMER's own address may be, as opposed to where the company has
+ * property. The two are different questions and must not share a default:
+ *   - #04's homepage search looks for a storage LOCATION, so it stays 'us' —
+ *     the portfolio is US-only, and offering a Canadian city would suggest a
+ *     page that does not exist.
+ *   - the rental flow asks for the shopper's billing / mailing / business
+ *     address, and a Canadian customer renting a US unit is perfectly ordinary.
+ *     That is why Canadian addresses returned nothing: not a bug in the search,
+ *     just the default below.
+ * Google takes up to 5 ISO codes here.
+ */
+export const CUSTOMER_ADDRESS_COUNTRIES = 'us,ca';
+
 interface AutocompleteOptions {
   base?: string;
-  /** ISO country codes, up to 5. Default 'us'. */
+  /** ISO country codes, up to 5. Default 'us' — see CUSTOMER_ADDRESS_COUNTRIES. */
   country?: string;
   /** 'address' for street addresses, '(cities)' for a city picker. */
   types?: string;

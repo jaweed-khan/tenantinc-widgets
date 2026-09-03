@@ -21,6 +21,7 @@ import React, { useEffect, useId, useRef, useState } from 'react';
 import { FormField, CheckIcon, AlertIcon } from '@shared/ui';
 import { Shimmer } from '@shared/Shimmer';
 import { AddressAutocomplete } from '@shared/AddressAutocomplete';
+import { CUSTOMER_ADDRESS_COUNTRIES } from '@shared/placesApi';
 import { BankIcon, CreditCardIcon, CheckTick, InfoIcon } from './icons';
 import { ChevronBig } from './planIcons';
 import { mountHostedCard, type HostedCardHandle } from './gpHostedFields';
@@ -162,7 +163,12 @@ export function BankForm({ total, onPay, payLabel }: { total: number; onPay: () 
   const [account, setAccount] = useState('');
   const [confirm, setConfirm] = useState('');
   // Pre-filled and validated in the design — the common case for a US site.
-  const [country, setCountry] = useState('United States');
+  /* Nothing preselected. It defaulted to 'United States', which is a value the
+     shopper never chose — and now that the select leads the billing block, a
+     Canadian cardholder would have had to notice it was already wrong rather
+     than simply pick. An empty string shows the "Select Billing Country"
+     option. */
+  const [country, setCountry] = useState('');
   const [address, setAddress] = useState('');
 
   /* ── Account number / confirm ────────────────────────────────────────────
@@ -225,7 +231,7 @@ export function BankForm({ total, onPay, payLabel }: { total: number; onPay: () 
           state={country ? 'success' : 'default'}
         />
         {/* Search affordance owns the icon slot — border only. */}
-        <AddressAutocomplete value={address} onChange={setAddress}>
+        <AddressAutocomplete country={CUSTOMER_ADDRESS_COUNTRIES} value={address} onChange={setAddress}>
           <FormField label="Billing Address" required type="search" value={address} onChange={setAddress} autoComplete="street-address" className={okQuiet(filled(address))} />
         </AddressAutocomplete>
       </div>
@@ -275,7 +281,12 @@ export function CardForm({ total, onPay, busy, gpPublicKey, payLabel }: {
   const [expiry, setExpiry] = useState('');
   const [cvv, setCvv] = useState('');
   const [name, setName] = useState('');
-  const [country, setCountry] = useState('United States');
+  /* Nothing preselected. It defaulted to 'United States', which is a value the
+     shopper never chose — and now that the select leads the billing block, a
+     Canadian cardholder would have had to notice it was already wrong rather
+     than simply pick. An empty string shows the "Select Billing Country"
+     option. */
+  const [country, setCountry] = useState('');
   const [zip, setZip] = useState('');
   // Billing address. Not in the Figma frame, but the rental APIs require a
   // street/city/state on both the payment method and the tenant contact, and a
@@ -351,6 +362,17 @@ export function CardForm({ total, onPay, busy, gpPublicKey, payLabel }: {
      the live handler is read through a ref. */
   const onTokenRef = useRef<(t: { token: string; masked: string }) => void>(() => {});
 
+  /* The mounted frames, kept so the row can move the caret INTO them. Focus is
+     the one thing a cross-origin frame will not take from ordinary DOM calls;
+     GP's own set-focus message is the only route, and this handle is how the
+     card row reaches it. */
+  const hostedRef = useRef<HostedCardHandle | null>(null);
+
+  /* Validity as a REF as well as state. The auto-advance needs to know whether
+     this event is the TRANSITION to valid, and reading that from the state
+     updater meant doing the focus inside it — see the advance below. */
+  const gpValidRef = useRef({ number: false, expiry: false });
+
   /* The row is one bordered box holding three inputs, so it turns green as a
      unit rather than per-input — there is only one border to turn. */
   const cardRowValid = hosted
@@ -393,7 +415,7 @@ export function CardForm({ total, onPay, busy, gpPublicKey, payLabel }: {
          attempt (see the handler below). The plain cells keep the blur rule:
          :placeholder-shown lets us see whether they hold anything. */
       if (payAttempted && !gpValid.number) return 'Enter a complete card number';
-      if (payAttempted && !gpValid.expiry) return 'Enter the expiry date as MM / YYYY';
+      if (payAttempted && !gpValid.expiry) return 'Enter the expiry date as MM / YY';
     } else {
       const n = digits(number);
       if ((payAttempted || (touched.number && n.length > 0)) && !validCard(number)) {
@@ -423,8 +445,14 @@ export function CardForm({ total, onPay, busy, gpPublicKey, payLabel }: {
      the error on its own instead. */
   const showBillingParts = addressPicked || filled(address)
     || filled(city) || filled(stateCode) || filled(zip);
+  /* `country` is in here now that it starts empty. It has always been marked
+     required, but it was also always pre-filled with 'United States', so the
+     marker never had to mean anything. Unset by default, leaving it out would
+     let someone pay without ever choosing one — a required field that does not
+     gate is just a decoration. The banner below names Billing Information,
+     which is where the select now sits. */
   const complete = cardRowValid && filled(name) && filled(address) && filled(city)
-    && stateCode.trim().length === 2 && zip.trim().length >= 3;
+    && stateCode.trim().length === 2 && zip.trim().length >= 3 && filled(country);
 
   /* ONE banner, whichever went wrong, shown under the "Credit / Debit" head
      rather than down beside the pay button (Figma 12029-93132). A shopper who
@@ -459,6 +487,21 @@ export function CardForm({ total, onPay, busy, gpPublicKey, payLabel }: {
       target.focus();
       const end = target.value.length;
       target.setSelectionRange(end, end);
+    };
+
+  /* The same gesture, but landing in a hosted frame instead of a DOM input.
+     The caret cannot be placed at the END of GP's value from out here — set-focus
+     is all the frame exposes — so this focuses it and leaves the caret wherever
+     the frame puts it. Still better than the alternative, which was the
+     backspace doing nothing at all. */
+  const backspaceIntoFrame = (field: 'number' | 'expiry') =>
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key !== 'Backspace') return;
+      const el = e.currentTarget;
+      if (el.selectionStart !== 0 || el.selectionEnd !== 0) return;
+      if (!hostedRef.current) return;
+      e.preventDefault();
+      hostedRef.current.focusField(field);
     };
 
   /*
@@ -565,16 +608,47 @@ export function CardForm({ total, onPay, busy, gpPublicKey, payLabel }: {
         /* Whether the frame validates, and nothing more. Its arrival proves
            nothing about content: GP binds this to focus and blur as well as to
            typing. */
+        /* CONTINUOUS TYPING, hosted half. On the TRANSITION to valid — not
+           merely on being valid — hand the caret to the next cell, so the row
+           fills straight through without reaching for the mouse. The plain
+           inputs have done this since they existed (see onNumber/onExpiry);
+           the frames could not, because focusing one needs GP's set-focus.
+           The transition test is what keeps it from ripping focus away on every
+           keystroke while someone edits an already-valid number.
+
+           TWO THINGS THIS DELIBERATELY IS NOT:
+
+           Not inside the setGpValid updater. A state updater must be pure —
+           React may call it during render, and twice in StrictMode — so a
+           focus() in there fires at a moment nobody chose. Focusing a plain
+           input in the same document survived that; reaching across into an
+           iframe did not.
+
+           Not synchronous. At this instant we are inside GP's postMessage
+           handler and the keystroke that completed the number has not finished
+           being processed in ITS frame. Focus taken mid-keystroke gets handed
+           straight back. Deferring a tick lets the number frame finish before
+           the expiry frame takes over. */
+        const wasValid = gpValidRef.current[field];
+        gpValidRef.current = { ...gpValidRef.current, [field]: valid };
         setGpValid((v) => (v[field] === valid ? v : { ...v, [field]: valid }));
+        if (valid && !wasValid) {
+          window.setTimeout(() => {
+            if (dead) return;
+            if (field === 'number') hostedRef.current?.focusField('expiry');
+            else cvvRef.current?.focus();
+          }, 0);
+        }
       },
     }).then((h) => {
       if (dead) { h?.dispose(); return; }
       handle = h;
+      hostedRef.current = h;
       // null ⇒ the library never arrived. Fall back to plain inputs rather
       // than leaving the shopper with no way to pay.
       setHosted(!!h);
     });
-    return () => { dead = true; handle?.dispose(); };
+    return () => { dead = true; hostedRef.current = null; handle?.dispose(); };
     // Mounted once per key. The frames outlive every other bit of state here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gpPublicKey]);
@@ -660,9 +734,11 @@ export function CardForm({ total, onPay, busy, gpPublicKey, payLabel }: {
               value={cvv}
               onChange={(e) => setCvv(e.target.value.replace(/\D/g, '').slice(0, CVV_DIGITS))}
               onBlur={() => markTouched('cvv')}
-              /* In hosted mode the expiry lives in GP's frame, which cannot be
-                 focused from here, so the chain stops at the CVV. */
-              onKeyDown={hosted ? undefined : backspaceInto(expiryRef)}
+              /* Backspace at the start of the CVV carries on into the expiry,
+                 in BOTH modes now. Hosted used to stop here on the grounds that
+                 GP's frame "cannot be focused from here" — it can, through
+                 set-focus; see HostedCardHandle.focusField. */
+              onKeyDown={hosted ? backspaceIntoFrame('expiry') : backspaceInto(expiryRef)}
               placeholder=" "
               inputMode="numeric"
               autoComplete="cc-csc"
@@ -709,7 +785,20 @@ export function CardForm({ total, onPay, busy, gpPublicKey, payLabel }: {
           the card is a common cause of a decline, and retyping the city and ZIP
           is where that mismatch creeps in. Typing it all by hand still works if
           the proxy is unreachable. */}
-      <AddressAutocomplete
+      {/* Country LEFT, address search RIGHT, 50/50 (.rf-pay-grid, which drops
+          to one column on mobile like every other pair here).
+          The country used to sit below with the ZIP, inside the block that
+          stays hidden until a suggestion is picked — so the one field that says
+          which country to search in only appeared after the search had already
+          been used. It leads now. */}
+      <div className="rf-pay-grid">
+        <SelectField
+          label="Billing Country" required value={country} onChange={setCountry}
+          options={['United States', 'Canada']}
+          state={country ? 'success' : 'default'}
+        />
+        <AddressAutocomplete
+        country={CUSTOMER_ADDRESS_COUNTRIES}
         value={address}
         onChange={setAddress}
         onPick={(place) => {
@@ -726,7 +815,8 @@ export function CardForm({ total, onPay, busy, gpPublicKey, payLabel }: {
           autoComplete="billing street-address" state={ok(filled(address))}
           error={payAttempted && !filled(address) ? 'Enter your billing address' : undefined}
         />
-      </AddressAutocomplete>
+        </AddressAutocomplete>
+      </div>
 
       {/* City, state, country and ZIP stay hidden until the address lookup
           fills them — four empty boxes before an address is chosen are four
@@ -751,12 +841,10 @@ export function CardForm({ total, onPay, busy, gpPublicKey, payLabel }: {
             />
           </div>
 
+          {/* Country is no longer here — it leads the block above. ZIP keeps
+              the half-width column rather than stretching: it is four or five
+              characters, and a full-bleed box for it reads as a mistake. */}
           <div className="rf-pay-grid">
-            <SelectField
-              label="Billing Country" required value={country} onChange={setCountry}
-              options={['United States', 'Canada']}
-              state={country ? 'success' : 'default'}
-            />
             <FormField
               label="Billing ZIP Code" required value={zip} onChange={setZip} autoComplete="postal-code"
               state={ok(zip.trim().length >= 3)}

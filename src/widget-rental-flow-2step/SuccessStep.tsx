@@ -19,6 +19,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Checkbox, FormField, isPossiblePhone } from '@shared/ui';
 import { AddressAutocomplete } from '@shared/AddressAutocomplete';
+import { CUSTOMER_ADDRESS_COUNTRIES } from '@shared/placesApi';
 import {
   ChevronBig, TickSingleIcon, AlertTriangleIcon, ClockGlyph, PhoneGlyph,
 } from './planIcons';
@@ -487,6 +488,7 @@ export function SuccessStep({ onGetAccess, chosen }: {
           ) : (
           <div className="rf-sx-fields">
             <AddressAutocomplete
+              country={CUSTOMER_ADDRESS_COUNTRIES}
               value={mailAddress}
               onChange={setMailAddress}
               onPick={(place) => {
@@ -590,7 +592,7 @@ export function SuccessStep({ onGetAccess, chosen }: {
           <Checkbox checked={business} onChange={setBusiness}>I am renting as a business</Checkbox>
           {business && (
             <div className="rf-sx-fields">
-              <AddressAutocomplete value={bizAddress} onChange={setBizAddress}>
+              <AddressAutocomplete country={CUSTOMER_ADDRESS_COUNTRIES} value={bizAddress} onChange={setBizAddress}>
                 <FormField label="Business Address" required type="search" value={bizAddress} onChange={setBizAddress} error={bad('bizAddress')} />
               </AddressAutocomplete>
               <div className="rf-pay-grid">
@@ -625,7 +627,7 @@ export function SuccessStep({ onGetAccess, chosen }: {
               </div>
               {/* Same lookup as the Business Address above it — this one was
                   left as a plain field when the others were wired. */}
-              <AddressAutocomplete value={altAddress} onChange={setAltAddress}>
+              <AddressAutocomplete country={CUSTOMER_ADDRESS_COUNTRIES} value={altAddress} onChange={setAltAddress}>
                 <FormField label="Address" required type="search" value={altAddress} onChange={setAltAddress} error={bad('altAddress')} />
               </AddressAutocomplete>
             </div>

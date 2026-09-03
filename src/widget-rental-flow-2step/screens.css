@@ -490,10 +490,11 @@
   min-width: 0;
 }
 .rf-cardcell--exp { flex: 0 0 88px; }
-/* GP's frame is labelled MM / YYYY where ours is MM / YY, and the label is
-   absolutely positioned with `white-space: nowrap` — so at its resting 16px it
-   ran straight out of the 88px cell and under CVV. Only wide in hosted mode;
-   the plain input keeps the narrower cell its shorter label fits. */
+/* Both cells are labelled MM / YY now — GP's frame said MM / YYYY until the
+   placeholder was shortened, and at its resting 16px that ran out of the 88px
+   cell and under CVV. The extra width is KEPT rather than reverted with the
+   label: the frame renders its own placeholder and the original failure was it
+   overflowing, so shrinking this back wants a look at a live frame first. */
 .rf-cardcell--exp-wide { flex: 0 0 116px; }
 .rf-cardcell--cvv { flex: 0 0 58px; }
 

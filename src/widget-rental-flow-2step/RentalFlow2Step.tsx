@@ -2279,6 +2279,9 @@ export function RentalFlow2Step({
           open
           firstName={finalizing.firstName}
           facilityName={brandName}
+          /* The same logo the header shows — content-panel image, then logoUrl,
+             then the bundled fallback. Resolved once, at line ~1635. */
+          logoSrc={headerLogo}
           /* The rental is still in flight, so hold the bar short of the end.
              On the preview path there is no request and this is false from the
              start, which is the original fixed-duration behaviour. */

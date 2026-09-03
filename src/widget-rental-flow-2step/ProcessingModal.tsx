@@ -49,8 +49,23 @@ const FINISH_MS = 700;
 
 export function ProcessingModal({
   open, firstName, facilityName, durationMs = DEFAULT_DURATION_MS, onDone, note, waiting = false,
+  logoSrc = storelocalLogo,
 }: {
   open: boolean;
+  /**
+   * The header's logo, so this screen shows the SAME brand as everything the
+   * shopper has just been through.
+   *
+   * It used to import the bundled storelocal PNG and render that directly, so
+   * an operator who set their own logo in the content panel got their brand all
+   * the way to Pay Now and then storelocal on the screen after it — announced
+   * as "storelocal storage" to a screen reader, too.
+   *
+   * The caller resolves the precedence (content-panel image, then a plain URL,
+   * then the bundle); the default here is that same bundled file, so a caller
+   * that passes nothing behaves exactly as before.
+   */
+  logoSrc?: string;
   /**
    * A request is still in flight, so do not finish.
    *
@@ -165,7 +180,11 @@ export function ProcessingModal({
       <div className="rf-proc" role="dialog" aria-modal="true" aria-labelledby="rf-proc-title">
         {/* Mobile only, via CSS — the desktop lightbox floats over a page that
             still shows the sticky header's logo behind it. */}
-        <img className="rf-proc-logo" src={storelocalLogo} alt="storelocal storage" />
+        {/* alt is EMPTY on purpose: this is decorative here — the heading
+            beside it already names the facility — and the old hardcoded
+            "storelocal storage" would announce the wrong brand on any site that
+            sets its own logo. */}
+        <img className="rf-proc-logo" src={logoSrc} alt="" />
         <h2 className="rf-proc-title" id="rf-proc-title">
           {greeting && <span className="rf-proc-name">{greeting}, </span>}
           we&rsquo;re finalizing your lease &amp; payment

@@ -15,6 +15,7 @@ import { NearbyMap, type MapPoint } from '@shared/NearbyMap';
 import cfg from '../../config.json';
 import { resolveCompanyIdFromSources } from '@shared/companySource';
 import { usePropertyId } from '../../propertyContext';
+import { useCompanyId } from '../../companyContext';
 import { PromoTagIcon } from '../Pricing';
 import { CarouselChevron } from '../chevron';
 
@@ -242,6 +243,9 @@ export function NearbySection() {
   // different company on this site, so using it would anchor "nearby" to a
   // property that isn't in the list and exclude nothing.
   const currentPropertyId = usePropertyId();
+  // Resolved by SpaceList, so the prop from the Duda JS tab reaches this section
+  // too. '' while it is still resolving — see ./companyContext.
+  const boundCompanyId = useCompanyId();
   const [view, setView] = useState<ViewMode>('list');
 
   // null = still loading; [] = loaded but nothing nearby.
@@ -256,12 +260,15 @@ export function NearbySection() {
 
     (async () => {
       try {
-        // Company comes from the `Company` collection, not config.json — see
-        // @shared/companySource. Cached, so this shares the page's single read.
-        const creds = {
-          ...cfg,
-          companyId: await resolveCompanyIdFromSources('#05 nearby', {}, cfg.companyId),
-        };
+        // The company SpaceList already resolved, which honours the `companyId`
+        // prop from the Duda JS tab. Resolving again here with an empty bound
+        // made the prop invisible to this section, so the `Company` collection
+        // won and the sidebar queried a different tenant than the unit list
+        // beside it. Falls back to the shared resolver only when the provider
+        // has nothing yet — the dev harness, or a mount outside SpaceList.
+        const company = boundCompanyId
+          || await resolveCompanyIdFromSources('#05 nearby', {}, cfg.companyId);
+        const creds = { ...cfg, companyId: company };
         const [raw, userLoc] = await Promise.all([
           // No requirePropertyId: this section wants ALL the company's properties,
           // and the collection is the site's own data — nothing to distrust.
@@ -276,13 +283,24 @@ export function NearbySection() {
           : current
             ? { lat: current.lat, lng: current.lng, source: 'property' as const }
             : null;
-        if (!ref) { if (!cancelled) setApiProps([]); return; }
-
-        const ranked = all
-          .filter((p) => p.id !== currentPropertyId)
-          .map((p) => ({ p, distanceMiles: haversineMiles(ref, p) }))
-          .sort((a, b) => a.distanceMiles - b.distanceMiles)
-          .slice(0, MAX_NEARBY);
+        // NO REFERENCE POINT is not "nothing nearby". It happens whenever the
+        // visitor declines geolocation (or just ignores the prompt) on an
+        // instance with no bound propertyId — and this used to `setApiProps([])`
+        // and render an empty section even though every property came back.
+        //
+        // #07 already degrades this way: list the locations WITHOUT distances
+        // rather than showing none. Ordering falls back to the API's own, which
+        // is arbitrary but stable, and each card simply omits its distance line.
+        const ranked = ref
+          ? all
+              .filter((p) => p.id !== currentPropertyId)
+              .map((p) => ({ p, distanceMiles: haversineMiles(ref, p) as number | null }))
+              .sort((a, b) => (a.distanceMiles as number) - (b.distanceMiles as number))
+              .slice(0, MAX_NEARBY)
+          : all
+              .filter((p) => p.id !== currentPropertyId)
+              .map((p) => ({ p, distanceMiles: null as number | null }))
+              .slice(0, MAX_NEARBY);
 
         // Hero photos for the whole list in one read (see @shared/propertyImages).
         // Fails soft: without it each card keeps the API's own image.
@@ -303,7 +321,12 @@ export function NearbySection() {
           units: [],
           adminFee: DEFAULT_ADMIN_FEE,
         }));
-        if (!cancelled) { setRefLoc({ lat: ref.lat, lng: ref.lng }); setApiProps(base); }
+        // No ref ⇒ no map centre either. The map keys off refLoc, so leaving it
+        // null keeps the list view rather than centring the map on nothing.
+        if (!cancelled) {
+          setRefLoc(ref ? { lat: ref.lat, lng: ref.lng } : null);
+          setApiProps(base);
+        }
 
         // Stage 2: enrich each card with spaces + promo as they resolve.
         ranked.forEach(({ p }) => {
@@ -336,7 +359,10 @@ export function NearbySection() {
     })();
 
     return () => { cancelled = true; };
-  }, [currentPropertyId]);
+    // Re-runs when the company lands: the provider starts '' and resolves a tick
+    // later, so without this the section would keep whatever the first pass
+    // fetched against the fallback company.
+  }, [currentPropertyId, boundCompanyId]);
 
   // While loading we render a skeleton card — showing DEMO_PROPERTIES here meant
   // real-looking names/prices flashed up and were then replaced. Demo data is

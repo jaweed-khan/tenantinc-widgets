@@ -7,6 +7,7 @@ import { fetchSpaceGroups, fetchWebsiteSpaceGroupId, mapApiToUnits } from './api
 import { boundText, resolvePropertyId, resolveRequireId } from '@shared/propertyBinding';
 import { resolveCompanyIdFromSources } from '@shared/companySource';
 import { PropertyIdProvider } from './propertyContext';
+import { CompanyIdProvider } from './companyContext';
 import { fetchProperties, extractPropertyExtras, type PropertyExtras } from './propertyApi';
 import {
   DEFAULT_FILTERS,
@@ -620,6 +621,7 @@ export function SpaceList({
   // sits on whichever side apLocation specifies.
   return (
     <PropertyIdProvider propertyId={effectivePropertyId}>
+     <CompanyIdProvider companyId={effectiveCompanyId ?? ''}>
     <div className={`sl-wrapper filter-top ap-${apLocation}`} ref={wrapperRef}>
       {/* Off when #18 draws the heading instead — see showHeading. */}
       {showHeading && (
@@ -723,6 +725,7 @@ export function SpaceList({
         />
       )}
     </div>
+     </CompanyIdProvider>
     </PropertyIdProvider>
   );
 }

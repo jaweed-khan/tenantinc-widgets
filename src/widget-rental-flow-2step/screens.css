@@ -108,7 +108,7 @@
   gap: 4px;
   height: 52px;
   padding: 2px 10px 2px 4px;
-  border: 2px solid var(--hb-secondary, #509e2f);
+  border: 2px solid var(--color_2, #509e2f);
   border-radius: 8px;
   background: var(--hb-white, #fff);
   color: var(--hb-text-night, #101318);
@@ -147,7 +147,13 @@
   font-weight: 700;
   line-height: 1.2;
 }
-.rf-proc-name { color: var(--hb-secondary, #509e2f); }
+/* --color_1, Duda's PRIMARY — this screen follows the brand colour, not the
+   CTA. It was --hb-secondary, which LOOKS like a themed value but is not:
+   tokens.css defines that one as a literal #509e2f, so it painted the same
+   green on every site whatever the theme said. Same variable on the bar below.
+   The fallback stays #509e2f: it is what the frame shows and what an unthemed
+   environment (the dev harness) has always rendered here. */
+.rf-proc-name { color: var(--color_1, #509e2f); }
 
 .rf-proc-bar {
   width: 225px;
@@ -159,7 +165,8 @@
 .rf-proc-bar-fill {
   height: 100%;
   border-radius: 100px;
-  background: var(--hb-secondary, #509e2f);
+  /* See .rf-proc-name — the site's PRIMARY, not the kit's fixed green. */
+  background: var(--color_1, #509e2f);
   /* Matches the component's tick interval so the bar glides rather than steps. */
   transition: width 60ms linear;
 }
@@ -637,20 +644,27 @@
   line-height: 16px;
   cursor: pointer;
 }
-.rf-sx-btn--solid { border: 0; background: var(--hb-secondary, #509e2f); color: var(--hb-white, #fff); }
+/* --color_2, Duda's CTA, NOT --hb-secondary. That token looks themed but is
+   not: tokens.css defines it as a literal #509e2f, so it painted the same green
+   on every site whatever the theme's CTA was. This one class covers three
+   controls Josh named — "Verify ID Now", "Save time and skip the office!"
+   (same class, plus --stack) and the ID modal's Resend, which reuses it. */
+.rf-sx-btn--solid { border: 0; background: var(--color_2, #509e2f); color: var(--hb-white, #fff); }
 
 /* Stacked label (Figma 11940-47764). .rf-sx-btn is a 16px/700 flex ROW, so the
    two lines need their own direction and their own sizes — 12px each, the lede
    regular and the action bold, centred. The 50px box is unchanged (the frame
    is 49px), and the two 12px lines clear it comfortably.
-   The green already comes from --hb-secondary, whose fallback IS the frame's
-   #509e2f, so nothing about the fill changes. Radius stays the kit's 8px
+   The fill comes from .rf-sx-btn--solid, which is --color_2 now, so this
+   button follows the site's CTA with the rest of them. Radius stays the kit's 8px
    rather than the frame's 3.881px: every button in this widget is on the kit
    token, and one odd corner radius would read as a mistake. */
 .rf-sx-btn--stack { flex-direction: column; gap: 2px; line-height: normal; }
 .rf-sx-btn-lede { font-size: 12px; font-weight: 400; line-height: normal; }
 .rf-sx-btn-main { font-size: 12px; font-weight: 700; line-height: normal; }
-.rf-sx-btn--outline { border: 2px solid var(--hb-secondary, #509e2f); background: #fefefe; color: var(--hb-text-night, #101318); }
+/* The border Josh asked for on "Verify In-Store"; the ID modal's Return button
+   reuses this class too. */
+.rf-sx-btn--outline { border: 2px solid var(--color_2, #509e2f); background: #fefefe; color: var(--hb-text-night, #101318); }
 /* The kit's model on all three buttons below: a real BACKGROUND rather than a
    brightness filter. A filter leaves `background` unset, so a host rule like
    the harness's `button:hover { background: #f3f4f6 }` — (0,1,1), outranking a
@@ -660,18 +674,18 @@
 .rf-sx-btn { transition: background var(--hb-transition, 0.15s ease), color var(--hb-transition, 0.15s ease); }
 .rf-sx-btn--solid:hover:not(:disabled) {
   filter: none;
-  background: color-mix(in srgb, var(--hb-secondary, #509e2f) 88%, #000);
+  background: color-mix(in srgb, var(--color_2, #509e2f) 88%, #000);
 }
 .rf-sx-btn--solid:active:not(:disabled) {
-  background: color-mix(in srgb, var(--hb-secondary, #509e2f) 78%, #000);
+  background: color-mix(in srgb, var(--color_2, #509e2f) 78%, #000);
 }
 .rf-sx-btn--outline:hover:not(:disabled) {
   filter: none;
-  background: var(--hb-secondary, #509e2f);
+  background: var(--color_2, #509e2f);
   color: var(--hb-white, #fff);
 }
 .rf-sx-btn--outline:active:not(:disabled) {
-  background: color-mix(in srgb, var(--hb-secondary, #509e2f) 78%, #000);
+  background: color-mix(in srgb, var(--color_2, #509e2f) 78%, #000);
   color: var(--hb-white, #fff);
 }
 

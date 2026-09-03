@@ -352,9 +352,20 @@ export function BlogsListing({
   // MAX_DOTS, so the count no longer bounds how wide the strip can get.
   const desktopStops = desktop.maxIndex + 1;
 
+  /* h2, not a div. This is what lets the SITE'S typography reach the heading:
+     a Duda theme styles headings from id-scoped element rules (`#dm h2 …`),
+     which match a real heading and outrank a single class, so family, size,
+     weight and colour follow the site. A <div> is unreachable by any of them —
+     it could only ever be the 48px this file hardcodes.
+     h2 rather than h1 because this is a SECTION of the property landing page,
+     not its title; #03 owns the h1 there. (#15's blogs page is the opposite
+     case — it IS the page, so its heading is an h1.)
+     The values in the CSS stay as the fallback for whatever a theme leaves
+     alone, and carry no !important, so the theme always wins where it speaks.
+     The subtitle was already a <p> and needed no change. */
   const headingBlock = (
     <div className="blog-heading-block">
-      <div className="blog-title">{heading}</div>
+      <h2 className="blog-title">{heading}</h2>
       <p className="blog-subtitle">{subheading}</p>
     </div>
   );
@@ -363,9 +374,9 @@ export function BlogsListing({
   // the identical element — a heading that changed between the two would shift
   // the card under it.
   const mobileTitleBlock = (
-    <div className="blog-mobile-title">
+    <h2 className="blog-mobile-title">
       <span>Storage Blogs</span>
-    </div>
+    </h2>
   );
 
   // Still reading: skeleton once past the delay, nothing before it. Both frames

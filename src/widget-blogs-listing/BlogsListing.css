@@ -568,6 +568,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    /* An h2 now, so the browser's own heading margin has to go — a div had
+       none. Everything below it is a fallback the site's theme overrides. */
+    margin: 0;
     font-size: 36px;
     font-weight: 700;
     line-height: 1.2;

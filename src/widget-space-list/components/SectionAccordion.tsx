@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { usePropertyId } from '../propertyContext';
+import { useCompanyId } from '../companyContext';
 import { fetchProperties, extractNearbyProperties } from '@shared/nearbyProperties';
 import { resolveCompanyIdFromSources } from '@shared/companySource';
 import cfg from '../config.json';
@@ -260,15 +261,18 @@ export function SectionAccordion({
    * this shares the one the page already makes.
    */
   const currentPropertyId = usePropertyId();
+  const boundCompanyId = useCompanyId();
   const [nearbyCount, setNearbyCount] = useState<number | null>(null);
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        const creds = {
-          ...cfg,
-          companyId: await resolveCompanyIdFromSources('#05 nearby badge', {}, cfg.companyId),
-        };
+        // Same company the section itself uses, so the badge cannot count one
+        // tenant's properties above a list showing another's. Falls back to the
+        // shared resolver only when the provider is still empty.
+        const company = boundCompanyId
+          || await resolveCompanyIdFromSources('#05 nearby badge', {}, cfg.companyId);
+        const creds = { ...cfg, companyId: company };
         const all = extractNearbyProperties(await fetchProperties(creds, {}), cfg.appId);
         const others = all.filter((p) => p.id !== currentPropertyId).length;
         if (!cancelled) setNearbyCount(Math.min(others, NEARBY_BADGE_MAX));
@@ -277,7 +281,9 @@ export function SectionAccordion({
       }
     })();
     return () => { cancelled = true; };
-  }, [currentPropertyId]);
+    // Re-count when the company lands — the provider starts '' and resolves a
+    // tick later, so the first pass would otherwise fix the wrong tenant's count.
+  }, [currentPropertyId, boundCompanyId]);
 
   const allKeys = ACCORDION_SECTIONS.map((s) => s.key).filter(
     (k) => k !== 'highlights' || featureHighlights.length > 0,

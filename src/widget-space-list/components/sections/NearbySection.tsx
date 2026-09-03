@@ -329,8 +329,19 @@ export function NearbySection() {
         }
 
         // Stage 2: enrich each card with spaces + promo as they resolve.
+        //
+        // `creds`, NOT `cfg`. These property ids came back under the company
+        // resolved above, and a property id is only unique WITHIN a company —
+        // so pairing them with config.json's company id asks for a property
+        // that tenant does not have, and every card's prices 400 with
+        // "Invalid ID format" while the cards themselves render fine. Stage 1
+        // was already correct; only this call reverted to the build-time value,
+        // which is why the list appeared but never priced.
+        //
+        // #07 has never had this bug: its fetchPropertySpaces wrapper resolves
+        // creds on every call rather than closing over config.
         ranked.forEach(({ p }) => {
-          fetchPropertySpaces(cfg, p.id).then(({ promo, spaces }) => {
+          fetchPropertySpaces(creds, p.id).then(({ promo, spaces }) => {
             if (cancelled) return;
             setApiProps((prev) =>
               prev

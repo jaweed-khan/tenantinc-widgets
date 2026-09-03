@@ -1777,8 +1777,14 @@ export function RentalFlow2Step({
     const goToCheckout = () => { if (checkoutUrl) window.location.assign(checkoutUrl); };
     // Same rail the flow used, rebuilt from the immutable success snapshot —
     // one element, placed in the desktop grid OR the mobile sheet, never both.
-    const confirmationRail = (
+    /* TWO of them, for the reason `rail`/`sheetRail` below are two: this rail is
+       rendered in the desktop column AND in the mobile sheet, and only the sheet
+       takes the logo header. One flagged copy would put the sheet's logo on the
+       desktop rail as well — which is the mistake that pair already documents.
+       `paid` is on BOTH, so the total reads "Total Paid to Move-In:" either way. */
+    const makeConfirmationRail = (sheet: boolean) => (
       <OrderRail
+        sheetLogo={sheet ? headerLogo : undefined}
         property={snapProp}
         selection={snap?.selection}
         quote={snap?.quote}
@@ -1786,6 +1792,8 @@ export function RentalFlow2Step({
         paid
       />
     );
+    const confirmationRail = makeConfirmationRail(false);
+    const confirmationSheetRail = makeConfirmationRail(true);
     return (
       <div className={`rf-wrapper${isMobile ? ' rf-wrapper--mobile' : ''}`} ref={wrapRef}>
         {headerDone}
@@ -1807,7 +1815,7 @@ export function RentalFlow2Step({
                 instead of displacing it. */}
             <div className="rfm-panel">
               <div className={`rfm-sheet-wrap${railOpen ? ' rfm-sheet-wrap--open' : ''}`}>
-                <div className="rfm-sheet">{confirmationRail}</div>
+                <div className="rfm-sheet">{confirmationSheetRail}</div>
               </div>
               <MobileLeaseBar
                 total={snap?.quote?.totalDue}
@@ -1969,7 +1977,10 @@ export function RentalFlow2Step({
             <div className="rfm-panel">
               <div className={`rfm-sheet-wrap${railOpen ? ' rfm-sheet-wrap--open' : ''}`}>
                 <div className="rfm-sheet">
-                  {railFor(true)}
+                  {/* `true, true` — rented AND sheet. The second flag was
+                      missing, so this sheet fell back to the photo hero while
+                      the identical sheet before payment showed the logo. */}
+                  {railFor(true, true)}
                 </div>
               </div>
               <MobileLeaseBar

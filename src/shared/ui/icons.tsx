@@ -67,6 +67,15 @@ export function SearchIcon(props: IconProps) {
   );
 }
 
+/** location pin, filled — hollow centre. Traced from Figma 1321316563. */
+export function MapPinSolidIcon({ size = 24, className }: IconProps) {
+  return (
+    <svg className={className} width={size} height={size} viewBox="36 30 24 24" fill="currentColor" aria-hidden="true">
+      <path fillRule="evenodd" clipRule="evenodd" d="M48.0004 32C46.3383 32 44.1609 32.5762 42.3799 34.0223C40.5615 35.4988 39.2109 37.8406 39.2109 41.2222C39.2109 44.6327 40.8256 47.4361 42.6495 49.3614C43.5639 50.3266 44.5503 51.0928 45.4559 51.6239C46.3216 52.1315 47.2416 52.5 48.0004 52.5C48.7592 52.5 49.6792 52.1315 50.5449 51.6239C51.4505 51.0928 52.4369 50.3266 53.3514 49.3614C55.1753 47.4361 56.7899 44.6327 56.7899 41.2222C56.7899 37.8406 55.4393 35.4988 53.6209 34.0223C51.8399 32.5762 49.6625 32 48.0004 32ZM44.5796 40.7895C44.5796 38.9001 46.1112 37.3684 48.0006 37.3684C49.89 37.3684 51.4217 38.9001 51.4217 40.7895C51.4217 42.6789 49.89 44.2105 48.0006 44.2105C46.1112 44.2105 44.5796 42.6789 44.5796 40.7895Z" />
+    </svg>
+  );
+}
+
 /** calendar/calendar-default — "date, schedule, month, event, plan". */
 export function CalendarIcon(props: IconProps) {
   return (

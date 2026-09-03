@@ -299,16 +299,6 @@ export function Confirmation({
                 {moveInDate && <p><b>Move-in Date:</b> {moveInDate}</p>}
               </div>
             </div>
-            {/* Name, email and phone used to sit here behind a user avatar.
-                Removed: none of the three is in the frame, and the shopper has
-                just typed all of them two screens ago. The lease reference is
-                not a person, so what is left carries no avatar — it is indented
-                to the other rows' text instead. */}
-            {reference && (
-              <div className="rfc-info-tenant">
-                <p className="rfc-info-break"><b>Reference:</b> {reference}</p>
-              </div>
-            )}
             {((officeHours && officeHours.length > 0) || (gateHours && gateHours.length > 0)) && (
               <div className="rfc-info-hours">
                 <ClockGlyph size={24} className="rfc-info-ico" />
@@ -320,6 +310,20 @@ export function Confirmation({
                     <p className="rfc-hours rfc-hours--gate"><b>Gate Hours</b>{gateHours.map((l) => <React.Fragment key={l}><br />{l}</React.Fragment>)}</p>
                   )}
                 </div>
+              </div>
+            )}
+            {/* LAST in this column, and pinned to its bottom by CSS. It used to
+                sit between the dates and the hours, which put a lease id in the
+                middle of the facility's opening times.
+
+                Name, email and phone used to sit here behind a user avatar.
+                Removed: none of the three is in the frame, and the shopper has
+                just typed all of them two screens ago. The lease reference is
+                not a person, so what is left carries no avatar — it is indented
+                to the other rows' text instead. */}
+            {reference && (
+              <div className="rfc-info-tenant">
+                <p className="rfc-info-break"><b>Reference:</b> {reference}</p>
               </div>
             )}
           </div>

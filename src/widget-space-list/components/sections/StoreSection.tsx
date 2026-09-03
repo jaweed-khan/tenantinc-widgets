@@ -4,6 +4,8 @@ import type { HoursStatus, ScheduleRow } from '@shared/accessHours';
 import { MessageModal } from '@shared/components/MessageModal';
 import { createLead } from '../../propertyApi';
 import { usePropertyId } from '../../propertyContext';
+import { fetchFacilities, type FacilityOption } from '@shared/facilities';
+import cfg from '../../config.json';
 import { CloseCircleIcon } from '@shared/ui';
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
@@ -136,9 +138,33 @@ export function StoreSection({ phones, socials, hours, scheduleSections, facilit
   // is actually looking at. The old clone sent none and fell back to
   // config.json's — which on this site is another company's property.
   const leadPropertyId = usePropertyId();
+
+  /* Every property on the company, for the contact modal's "Select Property".
+     Fetched when the modal is first opened rather than on mount: nothing else
+     in this section needs it, and a shopper who never opens the form should not
+     pay for the request. fetchFacilities promise-caches per company, so if #03
+     is on the same page the two share one flight.
+
+     cfg is read directly here because this section is built into a module-level
+     map with nowhere to pass a prop (see propertyContext / SectionAccordion) —
+     the same reason leadPropertyId comes from context. fetchFacilities resolves
+     the real company itself and only falls back to this. */
+  const [facilityOptions, setFacilityOptions] = useState<FacilityOption[]>([]);
   const [hoursOpen, setHoursOpen] = useState(false);
   const [messageOpen, setMessageOpen] = useState(false);
   const [reservationCode, setReservationCode] = useState('');
+
+  useEffect(() => {
+    if (!messageOpen || facilityOptions.length) return undefined;
+    let cancelled = false;
+    void fetchFacilities('#05 space-list', cfg).then((list) => {
+      if (!cancelled) setFacilityOptions(list);
+    });
+    return () => { cancelled = true; };
+    // facilityOptions is read by the guard above; depending on it would re-run
+    // this the moment the list lands.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messageOpen]);
 
   const phoneList = phones && phones.length ? phones : DEMO_PHONES;
 
@@ -296,7 +322,18 @@ export function StoreSection({ phones, socials, hours, scheduleSections, facilit
       <MessageModal
         open={messageOpen}
         onClose={() => setMessageOpen(false)}
-        facilities={[{ name: facilityName || 'This Facility', address: facilityAddress }]}
+        /* The portfolio once it lands; this listing's own property until then,
+           and if the call fails — which is what this passed before. */
+        facilities={facilityOptions.length
+          ? facilityOptions
+          : [{ name: facilityName || 'This Facility', address: facilityAddress }]}
+        /* Preselected, and taken OUT of the fetched list by id where possible so
+           the chosen entry is the same object the dropdown holds — same
+           reasoning as #03's. */
+        defaultFacility={
+          facilityOptions.find((f) => f.id === leadPropertyId)
+          ?? { name: facilityName || 'This Facility', address: facilityAddress }
+        }
         submitLead={(input) => createLead(input, { propertyId: leadPropertyId })}
       />
 

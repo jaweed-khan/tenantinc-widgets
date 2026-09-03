@@ -55,6 +55,21 @@
     .page-tab:hover { background: none; color: #374151; }
     .page-tab.active { color: #f45f30; border-bottom-color: #f45f30; }
 
+    /* Duda theme bar. The widgets read --color_1 / --color_2 off :root exactly
+       as they do on a published site; nothing here is widget-specific. */
+    .theme-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 14px;
+      margin: -18px 0 26px; padding: 10px 14px; background: #f9fafb;
+      border: 1px solid #e5e7eb; border-radius: 8px; font-size: 13px; color: #374151; }
+    .theme-bar b { font-weight: 700; color: #111827; }
+    .theme-field { display: flex; align-items: center; gap: 7px; }
+    .theme-field input[type=color] { width: 30px; height: 26px; padding: 0;
+      border: 1px solid #d1d5db; border-radius: 5px; background: none; cursor: pointer; }
+    .theme-field code { font-size: 11px; color: #6b7280; }
+    .theme-bar button { border: 1px solid #d1d5db; background: #fff; border-radius: 6px;
+      padding: 5px 10px; font-size: 12px; font-weight: 600; color: #374151; cursor: pointer; }
+    .theme-bar button:hover { background: #f3f4f6; }
+    .theme-note { color: #6b7280; }
+
     /* Mobile preview (dev-only). The frame is a real iframe, not a narrowed
        div: widgets test `(max-width: 768px)` against the VIEWPORT, and an
        iframe has its own — a narrow div would leave every media query still
@@ -96,6 +111,27 @@
     <button class="page-tab" data-page="city" onclick="showPage('city')">City page</button>
     <button class="page-tab" data-page="homepage" onclick="showPage('homepage')">Homepage</button>
     <button class="page-tab" data-page="ui-kit" onclick="showPage('ui-kit')">UI Kit (forms &amp; buttons)</button>
+  </div>
+
+  <!-- Duda theme (dev-only). A published Duda site defines --color_1 and
+       --color_2 on :root; the harness defines nothing, so every widget was
+       falling back to the literal baked into each rule. Those fallbacks are not
+       consistent across the repo, which is why the harness could show an orange
+       accent for something that is green on the real site. Setting them here
+       makes the harness show what Duda will. -->
+  <div class="theme-bar" id="theme-bar">
+    <b>Duda theme</b>
+    <span class="theme-field">
+      <input type="color" id="theme-color1" value="#f45f30" oninput="setTheme()" />
+      <label for="theme-color1">Primary <code>--color_1</code></label>
+    </span>
+    <span class="theme-field">
+      <input type="color" id="theme-color2" value="#509e2f" oninput="setTheme()" />
+      <label for="theme-color2">CTA <code>--color_2</code></label>
+    </span>
+    <button type="button" onclick="resetTheme()">Reset</button>
+    <button type="button" onclick="clearTheme()" id="theme-clear">Unset (show fallbacks)</button>
+    <span class="theme-note" id="theme-state"></span>
   </div>
 
   <div class="mobile-stage" id="mobile-stage">
@@ -289,6 +325,9 @@
         </label>
         <label>Limited avail. copy:
           <input id="sl-limited-copy" type="text" placeholder="Limited Availability" style="width:150px; padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px;" oninput="reinitSpaceList()" />
+        </label>
+        <label>Media Manager site id:
+          <input id="sl-media-site" type="text" placeholder="e.g. 37c2908c" title="Duda site id. Its Media Manager images (Small.png, Medium.png, Large.png) replace the bundled renders. Blank = bundled renders." style="width:130px; padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px;" oninput="reinitSpaceList()" />
         </label>
         <label class="checkbox"><input type="checkbox" id="sl-show-unavailable" onchange="reinitSpaceList()"> Show unavailable units</label>
         <label class="checkbox"><input type="checkbox" id="sl-enable-waitlist" onchange="reinitSpaceList()"> Enable waitlist</label>
@@ -490,6 +529,23 @@
       <div id="blogs-page-container" class="widget-container"></div>
 
       <div class="controls">
+        <div class="controls-group">
+          <span class="controls-group-label">Page head</span>
+          <label>
+            Heading:
+            <input id="bp-heading" type="text" value="Self Storage Blogs" style="width:190px" oninput="reinitBlogsPage()" />
+          </label>
+          <label>
+            Description:
+            <input id="bp-description" type="text" style="width:260px"
+                   value="Tips, guides and news to help you pack, store and move with confidence."
+                   oninput="reinitBlogsPage()" />
+          </label>
+          <label>
+            <input id="bp-hide-desc" type="checkbox" onchange="reinitBlogsPage()" />
+            hideDescription
+          </label>
+        </div>
         <div class="controls-group">
           <span class="controls-group-label">Lazy load</span>
           <label>
@@ -1115,9 +1171,85 @@
       return active ? active.getAttribute('data-page') : PAGES[0];
     }
 
+    /* ── Duda theme ────────────────────────────────────────────────────────
+       Sets --color_1 / --color_2 on :root, which is where a published Duda site
+       puts them, so the widgets need no harness-specific code to pick them up.
+
+       Persisted, because the mobile preview is a real iframe reloading this
+       same page — it reads the same localStorage on load and comes up themed
+       too, with no message passing between the two documents.
+
+       "Unset" is a real state, not the same as picking the default colours: it
+       REMOVES the properties so every rule falls back to its own literal, which
+       is what the harness did before this existed. Useful for spotting rules
+       whose fallback disagrees with the theme value. */
+    var THEME_KEY = 'harness_duda_theme';
+    var THEME_DEFAULTS = { color_1: '#f45f30', color_2: '#509e2f' };
+
+    function applyTheme(t) {
+      var root = document.documentElement;
+      if (t) {
+        root.style.setProperty('--color_1', t.color_1);
+        root.style.setProperty('--color_2', t.color_2);
+      } else {
+        root.style.removeProperty('--color_1');
+        root.style.removeProperty('--color_2');
+      }
+      var state = document.getElementById('theme-state');
+      if (state) {
+        state.textContent = t
+          ? 'set on :root — as Duda does'
+          : 'unset — each rule is showing its own fallback';
+      }
+    }
+
+    function readTheme() {
+      try {
+        var raw = localStorage.getItem(THEME_KEY);
+        if (raw === 'unset') return null;
+        return raw ? JSON.parse(raw) : THEME_DEFAULTS;
+      } catch (e) { return THEME_DEFAULTS; }
+    }
+
+    function saveTheme(t) {
+      try { localStorage.setItem(THEME_KEY, t ? JSON.stringify(t) : 'unset'); } catch (e) {}
+    }
+
+    function setTheme() {
+      var t = {
+        color_1: document.getElementById('theme-color1').value,
+        color_2: document.getElementById('theme-color2').value,
+      };
+      saveTheme(t); applyTheme(t);
+      if (mobileOn) loadMobileFrame();
+    }
+
+    function resetTheme() {
+      document.getElementById('theme-color1').value = THEME_DEFAULTS.color_1;
+      document.getElementById('theme-color2').value = THEME_DEFAULTS.color_2;
+      setTheme();
+    }
+
+    function clearTheme() {
+      saveTheme(null); applyTheme(null);
+      if (mobileOn) loadMobileFrame();
+    }
+
+    (function initTheme() {
+      var t = readTheme();
+      if (t) {
+        document.getElementById('theme-color1').value = t.color_1;
+        document.getElementById('theme-color2').value = t.color_2;
+      }
+      applyTheme(t);
+    })();
+
     // Inside the preview frame: hide the button so it can't nest.
     if (new URLSearchParams(location.search).get('frame') === '1') {
       document.getElementById('mobile-btn').style.display = 'none';
+      // The frame is themed by initTheme above, off the same localStorage —
+      // it just should not carry a second copy of the controls.
+      document.getElementById('theme-bar').style.display = 'none';
     }
 
     function showPage(name, skipUrl) {
@@ -1178,6 +1310,13 @@
         inEditor:    document.getElementById('sl-in-editor').checked,
         elementId:   'dev-element-001',
         siteId:      'dev-site',
+        // Media Manager artwork. siteId above is a placeholder, so the derived
+        // CDN url can only 403 here — paste a real site id to see the feature.
+        spaceImageBaseUrl: (function () {
+          var el = document.getElementById('sl-media-site');
+          var id = el && el.value.trim();
+          return id ? 'https://irp.cdn-website.com/' + encodeURIComponent(id) + '/dms3rep/multi' : '';
+        })(),
       };
     }
 
@@ -1328,6 +1467,11 @@
 
     function getBlogsPageProps() {
       return {
+        // The three Duda content-menu fields, named exactly as the JS tab sends
+        // them (blogHeading / blogDescription / hideDescription).
+        blogHeading:     document.getElementById('bp-heading').value,
+        blogDescription: document.getElementById('bp-description').value,
+        hideDescription: document.getElementById('bp-hide-desc').checked,
         batchSize:       Number(document.getElementById('bp-batch').value),
         visibleTagCount: Number(document.getElementById('bp-visible-tags').value),
       };

@@ -10,9 +10,24 @@ import {
   type BoundPropertyProps,
 } from '@shared/propertyBinding';
 import { resolveCompanyIdFromSources } from '@shared/companySource';
+import { fetchFacilities, type FacilityOption } from '@shared/facilities';
 
 export type { LeadInput };
 export type { BoundPropertyProps };
+export type { FacilityOption };
+
+/**
+ * Every property on the company, for the contact modal's "Select Property".
+ * Wrapped here rather than called from the component so the creds stay in the
+ * one file that owns them, exactly as every other call in this widget does.
+ */
+export function fetchFacilityOptions(bound: BoundPropertyProps = {}): Promise<FacilityOption[]> {
+  return fetchFacilities(
+    '#03 property-info',
+    { baseUrl: BASE_URL, appId: APP_ID, apiKey: API_KEY, companyId: COMPANY_ID },
+    boundText(bound.companyId),
+  );
+}
 
 const BASE_URL = cfg.baseUrl;
 const APP_ID = cfg.appId;

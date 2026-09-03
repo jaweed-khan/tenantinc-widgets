@@ -3,7 +3,7 @@ import { RichText } from '@shared/richText';
 
 // Notes — free-text copy authored in the Duda content menu (`notesContent`).
 //
-// Was a grey card (.sl-notes-card) that also carried a hardcoded "Visit our other
+// Was a grey card that also carried a hardcoded "Visit our other
 // location here: www.propertylandingpage.com" block — demo placeholder with a fake
 // URL and href="#". Both removed, so the accordion shows only what the editor
 // actually wrote. Demo copy below still covers an unconfigured instance.

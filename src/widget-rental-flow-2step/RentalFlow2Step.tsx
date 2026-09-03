@@ -28,7 +28,7 @@ import { readUnitSelection, clearUnitSelection } from '@shared/unitHandoff';
 import { ProcessingModal } from './ProcessingModal';
 import { SuccessStep } from './SuccessStep';
 import { Shimmer } from '@shared/Shimmer';
-import { FormField, Button, DateModal, isPossiblePhone, type FieldType, type PhoneCountry } from '@shared/ui';
+import { FormField, Button, DateModal, AlertIcon, isPossiblePhone, type FieldType, type PhoneCountry } from '@shared/ui';
 import { resolvePropertyId, boundText } from '@shared/propertyBinding';
 import { resolveCompanyIdFromSources } from '@shared/companySource';
 
@@ -572,16 +572,28 @@ function Step1Form({
       {transactionState === 'loading' && (
         <p className="rf-availability" role="status">Checking current availability and move-in pricing…</p>
       )}
+      {/* Both error states are the boxed treatment (Figma 12029-86499), not
+          just the one that could not fetch: they share .rf-availability--error
+          and sit in the same slot, so styling one as a box and leaving the
+          other as loose red text would read as a bug. The LOADING line above
+          stays plain — it is not an error.
+          A div, not a p: it holds the alert mark beside the text now. */}
       {transactionState === 'unavailable' && (
-        <p className="rf-availability rf-availability--error" role="alert">
-          This space is no longer available. {changeSpaceUrl && <a href={changeSpaceUrl}>Choose another space.</a>}
-        </p>
+        <div className="rf-availability rf-availability--error" role="alert">
+          <AlertIcon size={24} className="rf-availability-ico" />
+          <span>
+            This space is no longer available. {changeSpaceUrl && <a href={changeSpaceUrl}>Choose another space.</a>}
+          </span>
+        </div>
       )}
       {transactionState === 'error' && (
-        <p className="rf-availability rf-availability--error" role="alert">
-          We couldn’t verify this space right now. <button type="button" onClick={onRetry}>Try again</button>
-          {changeSpaceUrl && <> or <a href={changeSpaceUrl}>choose another space</a></>}.
-        </p>
+        <div className="rf-availability rf-availability--error" role="alert">
+          <AlertIcon size={24} className="rf-availability-ico" />
+          <span>
+            We couldn’t verify this space right now. <button type="button" onClick={onRetry}>Try again</button>
+            {changeSpaceUrl && <> or <a href={changeSpaceUrl}>choose another space</a></>}.
+          </span>
+        </div>
       )}
       {reserveError && <p className="rf-form-error" role="alert">{reserveError}</p>}
     </div>
@@ -1900,6 +1912,14 @@ export function RentalFlow2Step({
       // loads, so a live page never shows a made-up unit.
       unitLabel={unitNumberLabel ?? (previewContent && !selection ? '#111' : undefined)}
       changeSpaceUrl={rented ? undefined : (changeSpaceUrl ?? backToSpacesUrl)}
+      /* `rented` IS "the money has been taken" — it is only ever true on the
+         success screens, and the rail's total there is what was paid, not what
+         is still owed. It had been driving nothing but changeSpaceUrl, so the
+         right-hand rail still read "Total Cost to Move-In:" after payment while
+         MobileLeaseBar beside it already said "Total Paid:".
+         No `estimate` here: a reservation never reaches this builder — it exits
+         through the confirmation early-return above, which passes its own. */
+      paid={rented}
       quoteFailed={quoteFailed}
       // Only an UNHELD quote assumes today: the pre-hold GET carries no
       // start_date, while the hold-aware POST sends the chosen one and the
@@ -2114,6 +2134,17 @@ export function RentalFlow2Step({
               if (info.card && hold && quote) {
                 if (paying) return; // in flight — never double-charge
                 /*
+                 * The lightbox opens on the CLICK, not on the response.
+                 *
+                 * APIs 9/10/11 take several seconds, and all the shopper used
+                 * to get for them was a disabled button reading "Processing…",
+                 * followed by a modal that then ran its own timer — so the wait
+                 * was the request PLUS the animation. Now the modal covers the
+                 * request: its bar creeps while `paying` is true and completes
+                 * once the rental returns.
+                 */
+                setFinalizing(info);
+                /*
                  * space_mix_id is REQUIRED by documents/finalize and there is
                  * no way to recover it once the unit is held — it leaves
                  * units/available, and lease-set-up does not return it. If it
@@ -2188,6 +2219,10 @@ export function RentalFlow2Step({
                     setPaying(false);
                     if (!res.ok) {
                       console.error(`${logTag} rental failed at the ${res.stage} step:`, res.error);
+                      // Take the lightbox down: it is now open from the click,
+                      // and leaving it up would hide the error behind a bar
+                      // that can never finish.
+                      setFinalizing(undefined);
                       setPayError(res.error);
                       return;
                     }
@@ -2209,6 +2244,7 @@ export function RentalFlow2Step({
                     // rentSpace never throws, so reaching here is a bug rather
                     // than a payment failure — say something honest either way.
                     setPaying(false);
+                    setFinalizing(undefined);
                     console.error(`${logTag} rental threw unexpectedly:`, err);
                     setPayError('Something went wrong completing your rental. Please try again.');
                   }));
@@ -2243,6 +2279,10 @@ export function RentalFlow2Step({
           open
           firstName={finalizing.firstName}
           facilityName={brandName}
+          /* The rental is still in flight, so hold the bar short of the end.
+             On the preview path there is no request and this is false from the
+             start, which is the original fixed-duration behaviour. */
+          waiting={paying}
           onDone={() => setStaticPaid(true)}
         />
       )}

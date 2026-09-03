@@ -342,9 +342,13 @@
 }
 
 /* ── "Confirm your Move-In Date" lightbox ──────────────────────────────── */
+/* Shared by every modal in this flow. `overscroll-behavior: contain` stops a
+   wheel or drag over the DIM AREA — which scrolls nothing itself — from being
+   passed to the page behind it. */
 .rf-overlay {
   position: fixed;
   inset: 0;
+  overscroll-behavior: contain;
   z-index: 9999;
   display: flex;
   align-items: center;
@@ -1155,6 +1159,12 @@
     min-height: 64px;
     padding: 0 28px;
   }
+  /* ...but NOT the variant with the notice attached. That one deliberately
+     carries no padding of its own — the inset lives on its head so the blue
+     bar can run edge to edge inside the border — and the (0,2,0) rule above
+     was putting 28px back on both sides, which is what stopped the blue
+     reaching the border. Same (0,2,0), later in source, so it wins. */
+  .rf-wrapper .rf2-autopay--withbar { padding: 0; }
   /* Gutters only, no sides: .rf2-agree carries the 20px here, same as the
      panels. These two kept their own 20px and 16px, which on top of the
      container's would have double-inset the head and the document. */
@@ -1534,7 +1544,16 @@
 /* The "Lease Summary" line on the confirmation bar sits where step 2 puts the
    hold countdown: same row, same 16px, but plain — there is nothing ticking. */
 .rfm-bar-lease { font-size: 16px; line-height: 28px; color: #101318; }
-.rfc-details { min-width: 0; }
+/* A column, and stretched to the row's height, so "the bottom" means the
+   bottom of the CARD rather than the end of this column's own content —
+   .rfc-cols is `align-items: start`, which otherwise sizes each column to
+   whatever it happens to hold. */
+.rfc-details {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+}
 /* Dates: calendar icon + a column of one-line date rows (never wrap "…, 2026"). */
 .rfc-info-dates { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
 /* Every row is icon + block, 24px icon, dark. The gap is the frame's: 10px on
@@ -1890,7 +1909,26 @@
   line-height: 20px;
   text-align: center;
 }
-.rf-availability--error { color: #b3261e; }
+/* The error states are a BOX, not loose red text (Figma 12029-86499). Same
+   treatment as .rf-payerr, which is the banner already built for the payment
+   step — 16px padding, 16px radius, a 24px alert mark and the text beside it.
+   Only the ground differs, and deliberately: .rf-payerr is white because it
+   sits on the grey method panel, while this one sits on .rf-card, which is
+   white — a white box there would be invisible. The frame's own
+   rgba(253,239,239,0.45) is what it calls for.
+   `text-align: left` because .rf-availability centres its text for the plain
+   loading line; centred text beside a left-hand icon reads as misaligned. */
+.rf-availability--error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(253, 239, 239, 0.45);
+  color: #b3261e;
+  text-align: left;
+}
+.rf-availability-ico { flex: 0 0 auto; color: #b3261e; }
 .rf-availability a,
 .rf-availability button {
   color: inherit;
@@ -2336,7 +2374,12 @@
    layouts. Only the in-place rental passes these; the nonce page has none. */
 /* No icon of its own any more, so 34px — the 24px glyph the rows above use
    plus their 10px gap — lines its text up with theirs. */
-.rfc-info-tenant { margin-top: 16px; padding-left: 34px; }
+/* Pinned to the bottom of the column. `margin-top: auto` takes up whatever
+   slack the column has; the padding is what guarantees a gap when there is NO
+   slack — with the hours run long, auto collapses to zero and the reference
+   would otherwise butt straight against the last line of the gate hours.
+   The hours block carries no bottom margin, so this 24px is the whole gap. */
+.rfc-info-tenant { margin-top: auto; padding-top: 24px; padding-left: 34px; }
 .rfc-info-tenant p:last-child { margin-bottom: 0; }
 /* An email or a lease id has no spaces to break at, so a long one would push
    the column wide instead of wrapping. */

@@ -1,6 +1,6 @@
 import type { Unit, UnitSize } from './types';
 import cfg from './config.json';
-import { spaceImageFor } from './spaceImages';
+import { spaceImageFor, mediaManagerImagesFor } from './spaceImages';
 import { fetchWebsiteSpaceGroupId as findWebsiteSpaceGroupId } from '@shared/spaceGroups';
 import { resolveCompanyIdFromSources } from '@shared/companySource';
 
@@ -183,7 +183,12 @@ function tierPromo(tier: ApiTier): ApiPromoEntry | null {
 // Mapper — raw API response → Unit[]
 // ---------------------------------------------------------------------------
 
-export function mapApiToUnits(raw: unknown): Unit[] {
+/**
+ * @param media Where operator artwork comes from. `siteId` is Duda's
+ *   data.siteId; `baseUrl` overrides the derived CDN root. Omitted, cards
+ *   keep their bundled renders exactly as before.
+ */
+export function mapApiToUnits(raw: unknown, media?: { siteId?: string; baseUrl?: string }): Unit[] {
   const response = raw as ApiResponse;
   const appEntries = response?.applicationData?.[APP_ID];
   if (!appEntries?.length) return [];
@@ -314,6 +319,19 @@ export function mapApiToUnits(raw: unknown): Unit[] {
           // DEMO: derive card image from dimensions/size/type until the API
           // returns one per unit — see spaceImages.ts.
           image: spaceImageFor({ type, dimensions: tier.description, size, subtype }),
+          // Tried first by the cards; `image` above is the fallback. Parking
+          // is excluded: the bands describe storage, and a parking bay has
+          // its own covered/open render that a size file would not match.
+          // Parking is included now: it has its own naming (Car_RV_Boat and
+          // friends) rather than a size band. See mediaManagerImagesFor.
+          mediaImages: mediaManagerImagesFor(size, {
+            type,
+            siteId: media?.siteId,
+            baseUrl: media?.baseUrl,
+            // The SAME amenity the card prints under the size, so the picture
+            // and its caption can never disagree.
+            amenity: subtype,
+          }),
           inStorePrice,
           startingPrice,
           promoId: promo?.id,

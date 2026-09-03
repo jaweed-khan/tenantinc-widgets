@@ -588,8 +588,8 @@
 .ts-o2-cards {
   display: grid;
   grid-template-columns: repeat(var(--ts-cols, 3), minmax(0, 422px));
-  gap: 28px;
-  justify-content: center;
+  gap: 27px;
+  justify-content: start;
   align-items: stretch; /* all cards equal height (tallest wins) */
   padding-top: 16px; /* room for the Most Popular badge */
 }
@@ -608,6 +608,7 @@
 /* "Most Popular" is indicated by the badge only — the black border is reserved
    for the SELECTED card, so only ever one card reads as highlighted. */
 .ts-o2-card--selected { border-color: #101318; box-shadow: 0 4px 10px 3px rgba(71, 84, 116, 0.1); }
+.ts-o2-card:not(.ts-o2-card--soldout):hover { border-color: #101318; }
 
 .ts-o2-badge {
   position: absolute;
@@ -631,7 +632,7 @@
   flex-direction: column;
   align-items: center;
   gap: 16px;
-  padding: 20px 24px;
+  padding: 32px 24px 20px;
 }
 .ts-o2-card-head { text-align: center; }
 .ts-o2-name {
@@ -675,7 +676,7 @@
   flex: 0 0 auto;
   min-height: 210px;
   background: #f9fafb;
-  padding: 12px 44px 24px;
+  padding: 12px 48px 24px;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -1019,7 +1020,7 @@
   background: #f4f6f8;
   border-radius: 20px;
   width: 100%;
-  max-width: 1470px; /* Figma "Facility Page" popup width */
+  max-width: 1400px; /* Align the 1320px tier grid with the modal header gutters. */
   /* Use the space inside the equal 16px top/bottom gutters on short screens;
      retain the 747px Figma height on taller screens. */
   height: min(747px, calc(100vh - 32px));

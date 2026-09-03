@@ -274,7 +274,7 @@ function Track({
               key={post.id}
               // Sized off the SAME variable the transform steps by, so the card
               // pitch and the slide distance can never disagree.
-              style={{ flex: '0 0 var(--blog-step)' }}
+              style={{ flex: '0 0 var(--blog-item)' }}
               // Clipped cards keep their links focusable, so tabbing would walk
               // into a card nobody can see. `inert` takes them out of both the
               // tab order and the accessibility tree in one go; the aria-hidden

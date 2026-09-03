@@ -64,8 +64,16 @@ export function DisclaimerModal({
             <span>{title}</span>
           </p>
           <button type="button" className="promo-modal-close" onClick={onClose} aria-label="Close">
-            {/* Filled disc: .promo-modal is #ffffff. */}
-            <CloseCircleIcon size={18} />
+            {/* Filled disc: .promo-modal is #ffffff, so the outlined ring
+                #03's lightbox and the mega menu use (both dark) would be
+                invisible here.
+                32 desktop AND mobile, and every part of this control is the
+                "Send us a Message" modal's, which is the contact-popup
+                standard: same mark, same 32px box with no padding, same hover.
+                It carries no mobile override for the same reason that one
+                doesn't — one size serves both. Was an 18px glyph adrift in a
+                32px button, which matched no other popup here. */}
+            <CloseCircleIcon size={32} />
           </button>
         </div>
         <div className="promo-modal-body">

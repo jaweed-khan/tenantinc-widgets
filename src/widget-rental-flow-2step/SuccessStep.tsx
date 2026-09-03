@@ -223,10 +223,11 @@ export function SuccessStep({ onGetAccess, chosen }: {
         mailState: mailState.trim().length === 2 ? '' : 'Enter the two-letter state',
         mailZip: mailZip.trim().length >= 5 ? '' : 'Enter a valid ZIP code',
       } : {}),
-      dlNumber: filled(dlNumber) ? '' : 'Enter the licence number',
-      dlState: dlState.trim().length === 2 ? '' : 'Enter the two-letter state or province',
-      // Ten characters is a complete MM/DD/YYYY — "12/25/" is filled but not a date.
-      dlExp: dlExp.length === 10 ? '' : 'Enter a valid expiration date',
+      /* The three Driver's Licence fields are OPTIONAL and deliberately absent
+         from this map. Dropping their asterisks without dropping these would
+         have left the submit blocked by fields no longer marked as needed —
+         a dead button with nothing on screen explaining it. They are still
+         sent when filled; see the payload below. */
     } : {}),
     ...(business ? {
       bizAddress: filled(bizAddress) ? '' : 'Enter the business address',
@@ -538,23 +539,19 @@ export function SuccessStep({ onGetAccess, chosen }: {
             <div className="rf-sx-grid3">
               <FormField
                 label="License Number"
-                required
                 value={dlNumber}
                 onChange={setDlNumber}
                 autoComplete="off"
                 state={dlNumber.trim() ? 'success' : 'default'}
-                error={bad('dlNumber')}
               />
               {/* A text box, not the frame's dropdown: the record stores a
                   two-letter code, and no canonical state+province list exists
                   in the widget to populate a <Select> with. */}
               <FormField
                 label="State/Province"
-                required
                 value={dlState}
                 onChange={(v) => setDlState(v.toUpperCase().slice(0, 2))}
                 state={dlState.trim().length === 2 ? 'success' : 'default'}
-                error={bad('dlState')}
               />
               {/* Typed, not a picker. An expiry is read straight off the card in
                   the shopper's hand — eight digits is quicker than browsing to a
@@ -563,13 +560,11 @@ export function SuccessStep({ onGetAccess, chosen }: {
                   and reveals MM/DD/YYYY on focus. */}
               <FormField
                 label="Expiration Date"
-                required
                 mask="date"
                 value={dlExp}
                 onChange={setDlExp}
                 autoComplete="off"
                 state={dlExp.length === 10 ? 'success' : 'default'}
-                error={bad('dlExp')}
               />
             </div>
           </div>

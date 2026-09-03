@@ -1,10 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import './PropertyInfo.css';
 import { useStickySlot, useMediaQuery, MOBILE_STICKY_QUERY } from '@shared/stickyStack';
 import { useSwipe } from '@shared/useSwipe';
 import { scrollToSpaceList } from '@shared/promoBus';
-import { createLead, fetchPropertyDetails, propertyBreadcrumb, stateName, type PropertyDetails, type BoundPropertyProps } from './api';
+import { createLead, fetchPropertyDetails, fetchFacilityOptions, propertyBreadcrumb, stateName, type PropertyDetails, type BoundPropertyProps, type FacilityOption } from './api';
 import {
   Breadcrumb, collapseMiddle, locationCrumbHead, normaliseBase, placeSlug,
   LOCATION_BASE_PATH, type Crumb,
@@ -246,6 +246,9 @@ export function PropertyInfo(props: Props) {
     inEditor = false,
     // Dynamic-page bindings (content menu → "Connect to data" → Properties > …).
     propertyId,
+    // Already part of BoundPropertyProps, simply never pulled out here before:
+    // the contact modal's facility list is scoped to the company.
+    companyId,
     propertyName,
     propertyAddress,
     propertyPhones,
@@ -272,11 +275,33 @@ export function PropertyInfo(props: Props) {
 
   const [index, setIndex] = useState(0);
   const [lightbox, setLightbox] = useState(false);
+  /* The lightbox's own position along its track, which is NOT `index`: the
+     track carries a clone of the last photo before the first and a clone of the
+     first after the last, so cell = index + 1 and the two wrap steps have
+     somewhere real to slide TO. `lbSnap` turns the transition off for the one
+     frame in which we jump off a clone onto the photo it stands for. */
+  const [lbCell, setLbCell] = useState(1);
+  const [lbSnap, setLbSnap] = useState(true);
   const thumbsRef = useRef<HTMLDivElement>(null);
   const [hoursOpen, setHoursOpen] = useState(false);
   const [reservationOpen, setReservationOpen] = useState(false);
   const [reservationCode, setReservationCode] = useState('');
   const [messageOpen, setMessageOpen] = useState(false);
+  /* The whole portfolio, for the contact modal's dropdown. Fetched only once
+     the modal is first opened: a shopper who never contacts anyone should not
+     pay for a request, and this is the only thing on the page that needs it. */
+  const [facilityOptions, setFacilityOptions] = useState<FacilityOption[]>([]);
+  useEffect(() => {
+    if (!messageOpen || facilityOptions.length) return;
+    let cancelled = false;
+    void fetchFacilityOptions({ companyId }).then((list) => {
+      if (!cancelled) setFacilityOptions(list);
+    });
+    return () => { cancelled = true; };
+    // Deliberately not depending on facilityOptions: the guard above reads it,
+    // and adding it would re-run the effect the moment the list lands.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messageOpen, companyId]);
 
   // Live property details from the API; null until loaded (or on failure),
   // in which case the props/DEFAULTS above keep rendering unchanged.
@@ -522,11 +547,61 @@ export function PropertyInfo(props: Props) {
 
   const slides = provided.length ? provided : DEFAULT_GALLERY;
   const heroSlide = slides[0];
-  const current = slides[index] ?? slides[0];
   const overlay = Math.max(0, Math.min(1, overlayOpacity / 100));
 
   const prev = () => setIndex((i) => (i - 1 + slides.length) % slides.length);
   const next = () => setIndex((i) => (i + 1) % slides.length);
+
+  /* ── The lightbox steps its own track ────────────────────────────────────
+     It used to be one <img> with its src swapped, so moving between photos was
+     a cut — there was nothing on screen to animate. Every photo is a cell in a
+     track now and one transform slides it, the same shape as #07 and #12.
+
+     Wrapping is what makes this more than `translateX(-index * 100%)`. Stepping
+     next from the LAST photo sets index back to 0, and a track would then sweep
+     backwards across every photo to reach it. So the track is
+     [last, ...slides, first]: from the last cell, "next" moves FORWARD onto a
+     clone of the first, and once that has landed we jump to the real first with
+     the transition off. The jump is invisible because the two cells hold the
+     same picture.
+
+     `index` still owns the counter, the thumbnails and the hero, so nothing
+     outside the lightbox changes. `prev`/`next` above are the INLINE gallery's
+     and are deliberately left alone. */
+  /* useCallback so the key listener above can depend on them without re-binding
+     on every render. Both are pure state updates, and every one of them is a
+     FUNCTIONAL update, so neither closes over a value that could go stale. */
+  const lbPrev = useCallback(() => {
+    setLbSnap(false);
+    setLbCell((c) => c - 1);
+    setIndex((i) => (i - 1 + slides.length) % slides.length);
+  }, [slides.length]);
+  const lbNext = useCallback(() => {
+    setLbSnap(false);
+    setLbCell((c) => c + 1);
+    setIndex((i) => (i + 1) % slides.length);
+  }, [slides.length]);
+  /* A thumbnail is a jump, not a step, and it animates across exactly the way
+     the dots do on every other carousel here. No clone is involved. */
+  const lbGoTo = (i: number) => { setLbSnap(false); setLbCell(i + 1); setIndex(i); };
+
+  /* Opening positions the track without animating — otherwise the first photo
+     slides in from wherever the last visit left it. */
+  useEffect(() => {
+    if (!lightbox) return;
+    setLbSnap(true);
+    setLbCell(index + 1);
+    // `index` deliberately absent: this is the position at OPEN, and re-running
+    // it on every step would cancel the slide we just started.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lightbox]);
+
+  /* Landing on a clone: swap to the photo it stands for, with no transition.
+     Done on transitionend rather than a timer so it cannot fire mid-slide. */
+  const onLbTrackEnd = () => {
+    if (lbCell === 0) { setLbSnap(true); setLbCell(slides.length); }
+    else if (lbCell === slides.length + 1) { setLbSnap(true); setLbCell(1); }
+  };
 
   /* ── Drag-to-slide ──────────────────────────────────────────────────────
      The gallery used to be ONE <img> whose src was swapped, so a swipe could
@@ -608,28 +683,35 @@ export function PropertyInfo(props: Props) {
     if (reservationUrl && reservationUrl !== '#') window.location.href = reservationUrl;
   };
 
+  /* Two effects, not one. The key listener has to see the CURRENT steppers, so
+     it re-binds whenever they change; the scroll lock must not, because it
+     captures the page's own overflow before it changes it — re-running it would
+     capture the `hidden` we just set and restore that on close, leaving the
+     page permanently unscrollable. */
   useEffect(() => {
-    if (!lightbox) return;
+    if (!lightbox) return undefined;
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') setLightbox(false);
-      if (e.key === 'ArrowLeft') prev();
-      if (e.key === 'ArrowRight') next();
+      if (e.key === 'ArrowLeft') lbPrev();
+      if (e.key === 'ArrowRight') lbNext();
     }
     document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [lightbox, lbPrev, lbNext]);
+
+  useEffect(() => {
+    if (!lightbox) return undefined;
     // Lock the page behind the overlay, so a swipe that isn't quite horizontal
     // scrolls nothing underneath.
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prevOverflow;
-    };
+    return () => { document.body.style.overflow = prevOverflow; };
   }, [lightbox]);
 
   // The arrows are display:none under 768px, so swiping is the ONLY way to move
   // between photos on a phone. ignoreAfterSwipe stops the click that ends a swipe
   // from also closing the overlay.
-  const lbSwipe = useSwipe({ onSwipeLeft: () => next(), onSwipeRight: () => prev() });
+  const lbSwipe = useSwipe({ onSwipeLeft: () => lbNext(), onSwipeRight: () => lbPrev() });
   const closeLightbox = lbSwipe.ignoreAfterSwipe(() => setLightbox(false));
 
   // Hours modal: Esc closes; lock background scroll while open.
@@ -711,7 +793,7 @@ export function PropertyInfo(props: Props) {
         <CloseCircleIcon outlined size={isMobileViewport ? 32 : 52} />
       </button>
       <span className="pi-lb-arrow pi-lb-arrow--prev" role="button" tabIndex={0} aria-label="Previous photo"
-        onClick={(e) => { e.stopPropagation(); prev(); }}>
+        onClick={(e) => { e.stopPropagation(); lbPrev(); }}>
         <LightboxChevron size={20} className="pi-lb-chev" />
       </span>
       {/* The wrap deliberately does NOT swallow clicks: it's 90vw x 80vh, so on a
@@ -719,7 +801,22 @@ export function PropertyInfo(props: Props) {
           Only the photo itself is exempt. */}
       <span className="pi-lb-stage" onClick={(e) => e.stopPropagation()}>
         <span className="pi-lb-img-wrap">
-          <ImageFill className="pi-lb-img" src={current} onClick={(e) => e.stopPropagation()} />
+          {/* [last, ...slides, first]. The two clones are what let the wrap
+              steps slide forwards/backwards like any other step; see lbNext. */}
+          <span
+            className="pi-lb-track"
+            style={{
+              transform: `translateX(calc(${-lbCell} * 100%))`,
+              transition: lbSnap ? 'none' : 'transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1)',
+            }}
+            onTransitionEnd={onLbTrackEnd}
+          >
+            {[slides[slides.length - 1], ...slides, slides[0]].map((src, i) => (
+              <span className="pi-lb-cell" key={`lb-${i}-${src}`} aria-hidden={i === lbCell ? undefined : true}>
+                <ImageFill className="pi-lb-img" src={src} onClick={(e) => e.stopPropagation()} />
+              </span>
+            ))}
+          </span>
         </span>
         {/* Thumbnail rail. Only drawn when there is more than one photo — a
             single thumbnail of the picture already on screen is noise. */}
@@ -732,7 +829,7 @@ export function PropertyInfo(props: Props) {
                 className={`pi-lb-thumb${i === index ? ' is-active' : ''}`}
                 aria-label={`View photo ${i + 1}`}
                 aria-current={i === index || undefined}
-                onClick={(e) => { e.stopPropagation(); setIndex(i); }}
+                onClick={(e) => { e.stopPropagation(); lbGoTo(i); }}
               >
                 <ImageFill className="pi-lb-thumb-img" src={src} />
               </button>
@@ -741,7 +838,7 @@ export function PropertyInfo(props: Props) {
         )}
       </span>
       <span className="pi-lb-arrow" role="button" tabIndex={0} aria-label="Next photo"
-        onClick={(e) => { e.stopPropagation(); next(); }}>
+        onClick={(e) => { e.stopPropagation(); lbNext(); }}>
         <LightboxChevron size={20} className="pi-lb-chev" />
       </span>
       {/* No stopPropagation: a tap on the counter should close like anywhere else */}
@@ -1063,7 +1160,22 @@ export function PropertyInfo(props: Props) {
       <MessageModal
         open={messageOpen}
         onClose={() => setMessageOpen(false)}
-        facilities={[{ name: displayName, address: displayAddress }]}
+        /* The whole portfolio once it lands, so clearing the preselected
+           property leaves a real choice. Until then — and if the call fails —
+           the page's own property, which is what this passed before. */
+        facilities={facilityOptions.length
+          ? facilityOptions
+          : [{ name: displayName, address: displayAddress }]}
+        /* The page's own property, preselected: this widget IS a property page,
+           so there is one right answer to "which facility".
+           Matched OUT of the fetched list by id where possible, so the entry the
+           modal shows is the same object the dropdown holds — otherwise the
+           preselection and its own list item could differ in name formatting
+           and read as two different places. */
+        defaultFacility={
+          facilityOptions.find((f) => f.id === (property?.id ?? propertyId))
+          ?? { name: displayName, address: displayAddress }
+        }
         // This widget's creds and bound property; the modal has no idea which
         // company it is filing against and should not.
         submitLead={(input) => createLead(input, {

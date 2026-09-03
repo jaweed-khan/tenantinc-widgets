@@ -2,6 +2,23 @@
 
 /* Widget #08 — Map Locations (city page). Figma 10622:77201. */
 
+/* ── Accent colour ───────────────────────────────────────────────────────
+   Every accent here is `var(--color_2, #509e2f)` — Duda's CTA colour, which is
+   also what the kit's --hb-cta resolves to. NOT --color_1: that is the theme's
+   PRIMARY, and this widget was the only one accenting with it.
+
+   The fallback matters as much as the variable. Duda injects --color_2 on the
+   live site, but nothing defines it in the dev harness, so locally it is the
+   FALLBACK that paints. It used to be #f45f30 (and #f26500 in two rules), which
+   is why the harness showed orange accents for a colour that is green on a real
+   site — the local view disagreed with production and could not confirm a
+   change either way. #509e2f is the CTA's own value, so the two now agree.
+   Two rules using #f26500 while twelve used #f45f30 was an inconsistency in its
+   own right; all fourteen are one value now.
+
+   The two --hb-secondary greens (.ml-card--featured, .ml-featured) are left
+   alone deliberately: they are already on a brand token and are not accents. */
+
 /* ── Root ──────────────────────────────────────────────────────────────── */
 
 .ml-wrapper {
@@ -141,14 +158,6 @@
 .ml-sort-opt--on { font-weight: 600; background: #f4f6f8; }
 
 /* "Filter & Sort" on mobile — the same pill, filled. */
-.ml-pill--dark {
-  background: #101318;
-  color: #fff;
-  font-weight: 500;
-}
-
-.ml-pill--dark:hover { background: #22272f; }
-
 /* Count clipped to the pill's top-right corner, per the frame. */
 .ml-pill-badge {
   position: absolute;
@@ -160,7 +169,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 100px;
-  background: var(--color_1, #f45f30);
+  background: var(--color_2, #509e2f);
   color: #fff;
   font-size: 13px;
   font-weight: 600;
@@ -175,7 +184,7 @@
   height: 22px;
   padding: 0 6px;
   border-radius: 100px;
-  background: var(--color_1, #f45f30);
+  background: var(--color_2, #509e2f);
   color: #fff;
   font-size: 13px;
   font-weight: 700;
@@ -269,7 +278,7 @@
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: var(--color_1, #f45f30);
+  background: var(--color_2, #509e2f);
   color: #fff;
   font-size: 13px;
   font-weight: 600;
@@ -292,7 +301,7 @@
 }
 
 .ml-fp-reset:hover,
-.ml-fp-close:hover { color: var(--color_1, #f45f30); }
+.ml-fp-close:hover { color: var(--color_2, #509e2f); }
 
 .ml-fp-close {
   width: 32px;
@@ -518,7 +527,7 @@
   height: 50px;
   border: none;
   border-radius: 8px;
-  background: var(--color_1, #f26500);
+  background: var(--color_2, #509e2f);
   color: #fff;
   font-family: inherit;
   font-size: 16px;
@@ -569,7 +578,7 @@
   padding: 8px;
   border: none;
   border-radius: 8px;
-  background: var(--color_1, #f45f30);
+  background: var(--color_2, #509e2f);
   color: #fff;
   font-family: inherit;
   font-size: 14px;
@@ -593,7 +602,7 @@
 .ml-cta:hover,
 .ml-cta:focus,
 .ml-cta:active {
-  background: var(--color_1, #f45f30);
+  background: var(--color_2, #509e2f);
   color: #fff;
   text-decoration: none;
   filter: brightness(0.94);
@@ -689,7 +698,7 @@
    on it costs nothing; leaving it green would light a map bubble with no card
    answering it. */
 .ml-card--active {
-  border-color: var(--color_1, #f45f30);
+  border-color: var(--color_2, #509e2f);
   filter: drop-shadow(0px 8px 9px rgba(71, 84, 116, 0.2));
 }
 
@@ -820,11 +829,11 @@
   gap: 4px;
   width: 100%;
   padding: 12px;
-  border: 2px dashed var(--color_1, #f45f30);
+  border: 2px dashed var(--color_2, #509e2f);
   border-radius: 8px;
   background: #fff;
   /* TagIcon inside draws in currentColor. */
-  color: var(--color_1, #f45f30);
+  color: var(--color_2, #509e2f);
 }
 
 .ml-promo-text {
@@ -858,7 +867,7 @@
 
 .ml-unit-prices { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
 /* TagIcon draws in currentColor now, so its colour lives here. */
-.ml-unit-tag { display: flex; flex-shrink: 0; color: var(--color_1, #f45f30); }
+.ml-unit-tag { display: flex; flex-shrink: 0; color: var(--color_2, #509e2f); }
 
 .ml-price-strike,
 .ml-price-start { display: flex; flex-direction: column; align-items: flex-end; }
@@ -898,7 +907,7 @@
   height: 33px;
   border: none;
   border-radius: 4px;
-  background: var(--color_1, #f45f30);
+  background: var(--color_2, #509e2f);
   color: #fff;
   font-family: inherit;
   font-size: 14px;
@@ -928,7 +937,7 @@
 .ml-see-all {
   font-size: 16px;
   font-weight: 600;
-  color: var(--color_1, #f45f30);
+  color: var(--color_2, #509e2f);
   text-decoration: underline;
   white-space: nowrap;
 }
@@ -986,9 +995,9 @@
 }
 
 .ml-bubble--active {
-  /* The site's primary, not the frame's flat #f26500 — this widget follows the
-     Duda theme everywhere else. The fallback is that same orange. */
-  border-color: var(--color_1, #f26500);
+  /* The site's CTA, not the frame's flat #f26500 — this widget follows the Duda
+     theme everywhere else. See the accent note at the top of this file. */
+  border-color: var(--color_2, #509e2f);
   box-shadow: 0px 8px 18px rgba(71, 84, 116, 0.2);
   z-index: 1;
 }

@@ -1,9 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import './SizeGuide.css';
 import { ChevronRight, PlayButton } from './icons';
 import { SIZE_IMAGES, cover } from '@shared/demoImages';
 import { fetchSizes, groupSizesByLabel } from '@shared/sizesCollection';
 import { Shimmer } from '@shared/Shimmer';
+import { useCarousel, usePrefersReducedMotion } from '@shared/useCarousel';
+import { CarouselDots } from '@shared/CarouselDots';
 import storageLocker from './assets/storage-locker.png';
 
 // ---------------------------------------------------------------------------
@@ -85,16 +87,6 @@ function SizeCard({ unit }: { unit: SizeUnit }) {
   );
 }
 
-function Dots({ count, active, onPick }: { count: number; active: number; onPick: (i: number) => void }) {
-  return (
-    <>
-      {Array.from({ length: count }).map((_, i) => (
-        <button key={i} className={`sg-dot${i === active ? ' active' : ''}`} onClick={() => onPick(i)} aria-label={`Page ${i + 1}`} />
-      ))}
-    </>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
@@ -108,13 +100,13 @@ export function SizeGuide({
   heading = 'Size Guide',
   subheading = 'Sizes are approximate and may vary by facility.',
 }: SizeGuideProps) {
-  const [catIdx, setCatIdx] = useState(0);
-  const [page, setPage] = useState(0);
-  const [mobileIdx, setMobileIdx] = useState(0);
+
 
   // Sizes from the Duda `Sizes` collection; CATEGORIES is the fallback.
   // Bands come from `sizeLabel`, so the tab set is live too.
   const [live, setLive] = useState<Category[] | null>(null);
+  const [catIdx, setCatIdx] = useState(0);
+
   // True until the collection read settles. Without it the demo CATEGORIES painted
   // first and were then replaced by the real bands — a visible flash.
   const [loading, setLoading] = useState(true);
@@ -144,19 +136,32 @@ export function SizeGuide({
 
   // Demo bands are the fallback for an EMPTY/failed read only.
   const cats = live ?? CATEGORIES;
-  const category = cats[Math.min(catIdx, cats.length - 1)] ?? cats[0];
-  const totalPages = Math.max(1, Math.ceil(category.units.length / CARDS_PER_PAGE));
 
+  const category = cats[Math.min(catIdx, cats.length - 1)] ?? cats[0];
+
+  const reduceMotion = usePrefersReducedMotion();
+
+  // Desktop steps ONE CARD, not a page of three — same as #12. The old pager
+  // sliced `category.units` into a static grid, so a page change swapped the
+  // cards out with nothing on screen to animate.
+  const deskCar = useCarousel({ count: category.units.length, perView: CARDS_PER_PAGE });
+  const page = deskCar.index;
+  const totalPages = deskCar.maxIndex + 1;
+  const deskGoTo = deskCar.goTo;
+
+  /* Mobile pages the UNITS inside the selected band — a band holds several, so
+     the dots are the only way to reach the rest. The pills stay the category
+     control on every device. */
+  const mobileCar = useCarousel({ count: category.units.length, perView: 1, draggable: true });
+  const mobileIdx = mobileCar.index;
+  const mobileGoTo = mobileCar.goTo;
+
+  // A new band brings its own units, so both pagers start over.
   function selectCategory(i: number) {
     setCatIdx(i);
-    setPage(0);
-    setMobileIdx(0);
+    deskGoTo(0);
+    mobileGoTo(0);
   }
-
-  const pageUnits = useMemo(
-    () => category.units.slice(page * CARDS_PER_PAGE, page * CARDS_PER_PAGE + CARDS_PER_PAGE),
-    [category, page],
-  );
 
   const tabs = (
     <div className="sg-tabs">
@@ -207,30 +212,76 @@ export function SizeGuide({
 
       {/* ── Desktop: 3-up grid ──────────────────────────────────────────── */}
       <div className="sg-desktop">
-        <div className="sg-grid">
-          {pageUnits.map((unit) => (
-            <SizeCard key={unit.id} unit={unit} />
-          ))}
+        {/* Negative margin with no matching padding, and the per-item padding
+            standing in for the grid's gap — a flex `gap` is not part of the
+            step, so the pitch would drift from the travel. Straight from #12. */}
+        <div className="sg-track-window sg-track-window--desk" style={{ ['--sg-per-view' as string]: CARDS_PER_PAGE }}>
+          <div
+            className="sg-track"
+            style={{
+              transform: `translateX(calc(${(deskCar.offsetPct / 100).toFixed(6)} * var(--sg-step)))`,
+              transition: reduceMotion ? 'none' : 'transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1)',
+            }}
+          >
+            {category.units.map((unit) => (
+              <div className="sg-track-item sg-track-item--desk" key={unit.id}>
+                <SizeCard unit={unit} />
+              </div>
+            ))}
+          </div>
         </div>
         {totalPages > 1 && (
           <div className="sg-pagination">
-            <button className="sg-page-btn sg-page-btn-prev" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0} aria-label="Previous">
+            <button className="sg-page-btn sg-page-btn-prev" onClick={deskCar.prev} disabled={!deskCar.canPrev} aria-label="Previous">
               <ChevronRight size={40} />
             </button>
-            <Dots count={totalPages} active={page} onPick={setPage} />
-            <button className="sg-page-btn" onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1} aria-label="Next">
+            <CarouselDots count={totalPages} active={page} onPick={deskGoTo} dotClass="sg-dot" label="Go to page {n}" />
+            <button className="sg-page-btn" onClick={deskCar.next} disabled={!deskCar.canNext} aria-label="Next">
               <ChevronRight size={40} />
             </button>
           </div>
         )}
       </div>
 
-      {/* ── Mobile: single card ─────────────────────────────────────────── */}
+      {/* ── Mobile: one CATEGORY at a time, dragged ─────────────────────── */}
       <div className="sg-mobile">
-        <SizeCard key={`${category.key}-${mobileIdx}`} unit={category.units[mobileIdx]} />
+        {/* Every unit of the selected band rendered once inside a track. It used
+            to be a single SizeCard keyed on the index, so changing unit REMOUNTED
+            it — a cut, with nothing on screen to move and no way to swipe. */}
+        <div
+          className="sg-track-window sg-track-window--mobile"
+          {...mobileCar.handlers}
+        >
+          <div
+            className="sg-track"
+            style={{
+              transform: `translateX(calc(${(mobileCar.offsetPct / 100).toFixed(6)} * var(--sg-step)))`,
+              transition:
+                reduceMotion || mobileCar.dragging
+                  ? 'none'
+                  : 'transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1)',
+            }}
+          >
+            {category.units.map((unit, i) => (
+              <div
+                className="sg-track-item"
+                key={`${category.key}-${unit.id}`}
+                aria-hidden={i === mobileIdx ? undefined : true}
+              >
+                <SizeCard unit={unit} />
+              </div>
+            ))}
+          </div>
+        </div>
         {category.units.length > 1 && (
           <div className="sg-pagination sg-pagination-dots">
-            <Dots count={category.units.length} active={mobileIdx} onPick={setMobileIdx} />
+            <CarouselDots
+              count={category.units.length}
+              active={mobileIdx}
+              onPick={mobileGoTo}
+              dotClass="sg-dot"
+              label="Show size {n}"
+            />
           </div>
         )}
       </div>

@@ -501,8 +501,12 @@
   font-family: inherit;
   font-size: var(--hb-font-size-value, 16px);
   line-height: var(--hb-line-height-value, 20px);
-  /* Value sits on the lower line, leaving room for the floated label above. */
-  margin-top: 15px;
+  /* CENTRED, no offset. The 15px that used to be here pushed the value onto a
+     lower line to clear a floated label — but these cells hide their label
+     rather than float it, so there is nothing above to clear, and the offset
+     only meant the text landed 15px below where the placeholder had been.
+     .rf-cardcell is justify-content: center, so removing it puts the value
+     exactly where the label sits. */
   text-overflow: ellipsis;
 }
 /* placeholder=" " must never paint — the label is the placeholder here. */
@@ -519,17 +523,24 @@
   line-height: var(--hb-line-height-value, 20px);
   white-space: nowrap;
   pointer-events: none;
-  transition: transform var(--hb-transition, .15s ease), font-size var(--hb-transition, .15s ease);
+  transition: opacity var(--hb-transition, .15s ease);
 }
-/* Floated: focused, or holding a value. `:not(:placeholder-shown)` is what
-   makes autofill work — the browser fills without firing input events, but the
-   placeholder stops showing, so the label lifts anyway. */
+/* HIDDEN, not floated — these three cells behave like a plain placeholder:
+   gone the moment the cell is clicked, gone for good once it holds a value,
+   back if it is left empty. The floating treatment the other fields use needs
+   the parent to know whether a field is empty, and for the two hosted cells
+   that lives inside a cross-origin frame; this rule needs no such knowledge.
+
+   `:not(:placeholder-shown)` is what makes autofill work — the browser fills
+   without firing input events, but the placeholder stops showing, so the label
+   goes anyway. opacity rather than display, so nothing reflows as it goes. */
 .rf-cardrow-input:focus + .rf-cardcell-label,
 .rf-cardrow-input:not(:placeholder-shown) + .rf-cardcell-label {
-  transform: translateY(-18px);
-  font-size: var(--hb-font-size-label, 12px);
-  line-height: var(--hb-line-height-label, 15px);
+  opacity: 0;
 }
+/* The hosted cells' equivalent. Their value is in a cross-origin frame, so
+   :placeholder-shown cannot see it and the parent is told from JS instead. */
+.rf-cardcell-label--gone { opacity: 0; }
 
 /* Valid card row — one border, so it turns green as a unit (Figma 10080-28126). */
 .rf-cardrow--valid { border-color: var(--hb-field-border-success, #028a0c); }
@@ -540,6 +551,27 @@
 .rf-cardrow-tick--pending { visibility: hidden; }
 /* An expiry that is complete but unusable. */
 .rf-cardrow--error { border-color: var(--hb-field-border-error, #e53935); }
+/* ── Payment error banner (Figma 12029-93132) ─────────────────────────────
+   White card on the panel's #f9fafb, sitting directly under the "Credit /
+   Debit" head so the message is beside the fields it is about rather than
+   beside the button that refused. 16px round, 16px padding, a 24px alert mark
+   and 14px/18px red text — the frame's #d73632, which is a shade off the kit's
+   --hb-ada-red used for the per-field messages; the banner is a heavier thing
+   than a field hint and the design distinguishes them. */
+.rf-payerr {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  background: #fff;
+  border-radius: 16px;
+  color: #d73632;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 18px;
+}
+.rf-payerr-ico { flex: 0 0 auto; color: #d73632; }
+
 .rf-cardrow-msg {
   /* .rf-method-panel is a 20px flex column, so these siblings already sit 20px
      apart; -16px pulls the message back to 4px under the row it belongs to. */
@@ -1045,9 +1077,16 @@
 
 /* The scrolling viewport. The document is the only thing that scrolls — the
    header and the agree bar stay put, so the checkbox is always reachable. */
+/* The agreement itself scrolls. `overscroll-behavior: contain` is what stops a
+   flick or wheel that runs PAST its end from chaining out to the host page —
+   the body lock in LeaseModal cannot help with that, because the gesture is
+   being handled by this element, not the body. It is why the page still moved
+   behind an open agreement. The mobile rail sheet and its scrim already carry
+   the same line for the same reason. */
 .rf2-lease-view {
   flex: 1 1 auto;
   overflow: auto;
+  overscroll-behavior: contain;
   padding: 0 38px 24px;
   background: #f4f6f8;
 }
@@ -1177,31 +1216,15 @@
   display: block;
   width: 100%;
   min-width: 0;
-  /* Same offset as .rf-cardrow-input: the value sits on the lower line and
-     leaves the floated label its room above. The frame is exactly this box —
-     the offset must NOT be repeated on the input inside it. */
-  margin-top: 15px;
+  /* Centred with .rf-cardrow-input, and for the same reason — the label is
+     hidden rather than floated, so the frame's own placeholder has to land on
+     the line its digits will take. The frame IS this box; the offset must not
+     be repeated on the input inside it either. */
   height: 20px;
   /* GP sizes its own iframe; clip rather than let a tall one push the row. */
   overflow: hidden;
 }
 
-/*
-   A hosted cell's value lives in the iframe, so :placeholder-shown can never
-   see it and a label left to CSS would sit centred on top of the digits.
-
-   This used to be applied for the whole of hosted mode, which left both frames
-   looking permanently focused beside a resting CVV. It is applied from FIRST
-   FOCUS now instead — see gpTouched in PaymentSection — so the untouched state
-   matches every other field and the label still clears the value before one can
-   exist. Same numbers as the :focus/:not(:placeholder-shown) rule above,
-   deliberately, and a transition so it travels rather than jumps.
-*/
-.rf-cardcell-label--pinned {
-  transform: translateY(-18px);
-  font-size: var(--hb-font-size-label, 12px);
-  line-height: var(--hb-line-height-label, 15px);
-}
 .rf-gpfield iframe {
   display: block;
   width: 100%;

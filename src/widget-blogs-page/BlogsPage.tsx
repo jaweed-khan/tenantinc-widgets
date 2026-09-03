@@ -4,7 +4,7 @@ import { CloseCircleIcon } from '@shared/ui/icons';
 import { ShareIcon, FilterHorizontalIcon, SearchIcon } from './icons';
 import { BLOG_IMAGES, cover } from '@shared/demoImages';
 import { Breadcrumb } from '@shared/Breadcrumb';
-import { hasCollectionsApi, logSource } from '@shared/dudaCollections';
+import { hasCollectionsApi, logSource, bool } from '@shared/dudaCollections';
 import { fetchBlogPosts, slugify, type BlogPostData } from '@shared/blogPosts';
 import { SOCIAL_ICONS } from '@shared/socialIcons';
 import { absolutePostUrl, shareTargets, type SocialProfiles } from '@shared/shareLinks';
@@ -24,15 +24,19 @@ import { useSocialProfiles } from '@shared/useSocialProfiles';
 // already do — see the line-clamp note on .bpg-card-title) without either one
 // having to grow a variant prop.
 //
-// Scope: filter bar + grid, PLUS the breadcrumb. The 80px "Self Storage Blogs"
-// hero above it still comes from the Duda page.
+// Scope: breadcrumb, heading, intro paragraph, filter bar, grid — the whole
+// page, in that order.
+//
+// The 80px "Self Storage Blogs" hero used to be a Duda SECTION above this
+// widget, which made the breadcrumb's position a problem: the frame puts the
+// trail above the hero, and a widget sitting under that section could only ever
+// draw it underneath. The heading is the widget's own now (`blogHeading` /
+// `blogDescription` from the content menu), so the order matches the frame with
+// nothing to arrange on the Duda side.
 //
 // The breadcrumb was originally left out on the grounds that the Duda page
 // "already has its own breadcrumb element". It does not — checked on the live
-// site — so the widget draws it (9340:23373). Note the frame puts the trail
-// ABOVE the hero while this widget renders below it: if the hero is a Duda
-// section above this element, either move this widget above that section or set
-// `showBreadcrumb={false}` and use a Duda element instead.
+// site — so the widget draws it (9340:23373).
 //
 // KNOWN CEILING — the lazy load is client-side. `readCollection` does a single
 // `.get()` and Duda's pageSize is 100 (see @shared/dudaCollections), so this
@@ -302,8 +306,10 @@ function FilterPopup({ tags, activeTags, onToggle, onClear, onClose }: FilterPop
             {activeCount > 0 && <span className="bpg-modal-badge">{activeCount}</span>}
           </div>
           <div className="bpg-modal-header-right">
+            {/* "Reset", matching #05 and #08 — three filter popups in the same
+                site should not each name this differently. */}
             {activeCount > 0 && (
-              <button type="button" className="bpg-modal-reset" onClick={onClear}>Clear all</button>
+              <button type="button" className="bpg-modal-reset" onClick={onClear}>Reset</button>
             )}
             <button type="button" className="bpg-modal-close" onClick={onClose} aria-label="Close filters">
               {/* Filled disc: .bpg-filter-modal is #fff. 32 fills the 32px
@@ -338,17 +344,29 @@ export interface BlogsPageProps {
   /** Duda collection name (case-sensitive). */
   collection?: string;
   /**
+   * Page heading — the h1, centred, under the breadcrumb (Duda `blogHeading`).
+   * The widget draws this now; it used to be a Duda section above the widget,
+   * which is what the scope note at the top of this file described.
+   */
+  blogHeading?: string;
+  /** Centred paragraph under the heading (Duda `blogDescription`). */
+  blogDescription?: string;
+  /**
+   * Duda content-menu CHECKBOX, so it can arrive as a real boolean or as the
+   * string "true"/"false" depending on how the field is serialised — hence
+   * `bool()` rather than a bare truthiness test. A bare test would read the
+   * string "false" as true and hide the paragraph exactly when it should show.
+   */
+  hideDescription?: boolean | string;
+  /**
    * Breadcrumb (Figma 9340:23373). Named to match #16 blog-post's props, so the
    * two blog widgets are configured the same way.
    *
    * DESKTOP ONLY — hidden under 900px in CSS. There is no mobile frame for it.
    *
-   * The scope note at the top of this file says the Duda page owns this trail.
-   * That turned out not to be the case on the live site, so the widget draws it
-   * — but it draws it at the TOP OF ITSELF, and the frame puts the trail above
-   * the 80px "Self Storage Blogs" hero. If that hero is a Duda section sitting
-   * above this widget, move the widget above it (or turn this off and use a Duda
-   * element) or the trail will sit under the heading instead of over it.
+   * Sits at the top of the widget, above the heading — which is the frame's
+   * order, and is only true now that the heading is the widget's own rather
+   * than a Duda section above it.
    */
   showBreadcrumb?: boolean;
   homeLabel?: string;
@@ -440,6 +458,9 @@ function collectTags(posts: BlogPostData[]): string[] {
 
 export function BlogsPage({
   collection = 'BlogPosts',
+  blogHeading = 'Self Storage Blogs',
+  blogDescription = '',
+  hideDescription = false,
   blogBasePath = '/blogs',
   showBreadcrumb = true,
   homeLabel = 'Home',
@@ -452,6 +473,21 @@ export function BlogsPage({
   const inlineTagCount = positiveInt(visibleTagCount, DEFAULT_VISIBLE_TAGS);
   const perBatch = positiveInt(batchSize, DEFAULT_BATCH_SIZE);
   const placeholder = searchPlaceholder.trim() || 'Search Blog';
+
+  /* The heading block. Rendered in the loading branch as well as the real one:
+     both values are props, already in hand before the collection resolves, so
+     painting them costs no layout shift and gives the reader something true
+     while the posts load — the same reasoning the breadcrumb already uses.
+     An empty heading renders no <h1> at all rather than an empty one, so an
+     operator who clears the field gets nothing instead of a blank 48px line. */
+  const headingText = (blogHeading ?? '').trim();
+  const descriptionText = bool(hideDescription) ? '' : (blogDescription ?? '').trim();
+  const pageHead = (headingText || descriptionText) ? (
+    <header className="bpg-head">
+      {headingText && <h1 className="bpg-title">{headingText}</h1>}
+      {descriptionText && <p className="bpg-intro">{descriptionText}</p>}
+    </header>
+  ) : null;
 
   const [posts, setPosts] = useState<BlogPostData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -531,7 +567,7 @@ export function BlogsPage({
 
   const allTags = useMemo(() => collectTags(posts), [posts]);
 
-  // Turning the deep-linked chip off (its own X, "Clear all", or the empty
+  // Turning the deep-linked chip off (its own X, "Reset", or the empty
   // state's reset) drops the param, so a reload doesn't bring the filter back.
   // `linkedTag` is then forgotten, which is what stops a re-check re-adding it.
   useEffect(() => {
@@ -669,6 +705,7 @@ export function BlogsPage({
     return (
       <div className="bpg-wrapper">
         {crumbs}
+        {pageHead}
         <BarSkeleton />
         <div className="bpg-grid">
           <CardSkeletons count={Math.max(MIN_SKELETON_CARDS, perBatch)} />
@@ -686,6 +723,7 @@ export function BlogsPage({
   return (
     <div className="bpg-wrapper">
       {crumbs}
+      {pageHead}
 
       {/* ── Filter / search bar ─────────────────────────────────────────────── */}
       <div className="bpg-bar">
@@ -693,7 +731,11 @@ export function BlogsPage({
           {allTags.length > 0 && (
             <button
               type="button"
-              className={`bpg-filter-btn${panelOpen ? ' active' : ''}`}
+              /* Dark when the panel is open OR a category is actually
+                 selected. It was panel-open only, so a button carrying two
+                 applied filters looked identical to one carrying none the
+                 moment the popup closed. */
+              className={`bpg-filter-btn${panelOpen || activeCount > 0 ? ' active' : ''}`}
               onClick={() => setPanelOpen((o) => !o)}
               aria-label="Filter by category"
               aria-expanded={panelOpen}
@@ -745,7 +787,10 @@ export function BlogsPage({
           tags={allTags}
           activeTags={activeTags}
           onToggle={toggleTag}
-          onClear={() => { setActiveTags([]); resetBatches(); }}
+          /* Reset CLOSES as well as clearing, as it now does in #05 and #08.
+             The tags are widget state, not a draft held by the popup, so the
+             cleared list is already live and the close cannot discard it. */
+          onClear={() => { setActiveTags([]); resetBatches(); setPanelOpen(false); }}
           onClose={() => setPanelOpen(false)}
         />
       )}

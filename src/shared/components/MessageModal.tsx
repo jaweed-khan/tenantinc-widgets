@@ -53,7 +53,13 @@ function EnvelopeIcon({ size = 24 }: { size?: number }) {
   );
 }
 
-export interface Facility { name: string; address?: string; }
+export interface Facility {
+  /** Property id where the list came from the API. Optional because a caller
+      with only the page's own property has no id to give — see #03/#05. */
+  id?: string;
+  name: string;
+  address?: string;
+}
 
 function ChevronDown({ size = 24 }: { size?: number }) {
   return (
@@ -132,7 +138,7 @@ function MessageBox({
 }
 
 export function MessageModal({
-  open, onClose, facilities, submitLead, termsHref = '#',
+  open, onClose, facilities, submitLead, termsHref = '#', defaultFacility = null,
 }: {
   open: boolean;
   onClose: () => void;
@@ -140,10 +146,24 @@ export function MessageModal({
   /** The widget's own createLead — see the note at the top of this file. */
   submitLead: (input: LeadInput) => Promise<unknown>;
   termsHref?: string;
+  /**
+   * The property whose page this is, preselected on open. Both widgets that use
+   * this modal sit ON a property, so asking the shopper to pick the one they
+   * are already looking at is a step with one right answer.
+   *
+   * Explicit rather than "preselect facilities[0] when there is only one":
+   * that would be an accident of list length, and would silently stop working
+   * the moment a caller passes the full portfolio — which is precisely the
+   * change most likely to come next.
+   *
+   * Clearing it is the shopper's call; Clear was already there and still is.
+   */
+  defaultFacility?: Facility | null;
 }) {
-  // Always opens on the "Select Facility" dropdown (Figma 10199-60873); picking
-  // an option swaps to the name + address state (Figma 10199-67707).
-  const [selected, setSelected] = useState<Facility | null>(null);
+  // Opens on the preselected property when the caller names one, otherwise on
+  // the "Select Facility" dropdown (Figma 10199-60873); picking an option swaps
+  // to the name + address state (Figma 10199-67707).
+  const [selected, setSelected] = useState<Facility | null>(defaultFacility);
   const [listOpen, setListOpen] = useState(false);
   const [consent, setConsent] = useState(false);
 
@@ -154,14 +174,23 @@ export function MessageModal({
   const set = (key: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [key]: v }));
   const submitting = status === 'submitting';
 
-  // Reset the form each time the modal is opened.
+  /* Reset the form each time the modal is opened — the property included, so a
+     shopper who cleared it last time gets the page's own property back rather
+     than an empty field they have to fill in again.
+     Keyed on the NAME, not the object: the callers build `{name, address}`
+     inline on every render, so depending on the object itself would re-run this
+     on each one and wipe what the shopper had typed. */
+  const defaultName = defaultFacility?.id ?? defaultFacility?.name;
   useEffect(() => {
     if (!open) return;
     setForm({ first: '', last: '', email: '', mobile: '', message: '' });
     setConsent(false);
     setStatus('idle');
     setError('');
-  }, [open]);
+    setSelected(defaultFacility ?? null);
+    setListOpen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, defaultName]);
 
   useEffect(() => {
     if (!open) return;
@@ -214,7 +243,6 @@ export function MessageModal({
   if (!open) return null;
 
   const facilityName = selected?.name ?? 'STORAGE FACILITY';
-  const canReselect = facilities.length > 1;
 
   return (
     <div className="pi-msg-overlay" onMouseDown={onClose}>
@@ -247,28 +275,19 @@ export function MessageModal({
                 {/* Static, not a button (Figma 10295-76697). Making the whole
                     block clickable is what gave it a hover fill — and that fill
                     was the host's `button:hover`, since this rule never declared
-                    one of its own. "Change Property" is the control now. */}
+                    one of its own. Clear is the control now. */}
                 <div className="pi-msg-facility-info">
                   <span className="pi-msg-facility-name">{selected.name}</span>
                   {selected.address && (
                     <span className="pi-msg-facility-addr"><MapPinIcon size={24} /><span>{selected.address}</span></span>
                   )}
                 </div>
-                {/* Clear always, Change Property only with somewhere to change
-                    TO. With one facility "Change Property" opens a list of the
-                    one you already have, which is why it is gated — but the
-                    shopper still needs a way back to the empty state, and that
-                    is what Clear is for. */}
+                {/* Clear is the only control. Changing property is Clear then
+                    pick from the dropdown — one route to a different facility
+                    rather than two doing the same job, and it removes a button
+                    that could only ever be shown or hidden depending on how many
+                    facilities happened to have loaded. */}
                 <div className="pi-msg-facility-actions">
-                  {canReselect && (
-                    <button
-                      type="button"
-                      className="pi-msg-facility-change"
-                      onClick={() => setListOpen((o) => !o)}
-                    >
-                      Change Property
-                    </button>
-                  )}
                   <button
                     type="button"
                     className="pi-msg-facility-clear"
@@ -287,8 +306,11 @@ export function MessageModal({
             )}
             {listOpen && facilities.length > 0 && (
               <ul className="pi-msg-dd-list">
+                {/* Keyed on the id where there is one: two facilities CAN share
+                    a name (a company with two "Storage Outlet - Chino" rows),
+                    and a duplicate React key silently drops one from the list. */}
                 {facilities.map((f) => (
-                  <li key={f.name}>
+                  <li key={f.id ?? f.name}>
                     <button type="button" onClick={() => { setSelected(f); setListOpen(false); }}>{f.name}</button>
                   </li>
                 ))}

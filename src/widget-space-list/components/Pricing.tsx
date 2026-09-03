@@ -205,8 +205,18 @@ export function JunkFeeDisclaimer({ config }: { config: WidgetConfig }) {
  * one under the button and the other under the price looked like a bug. This
  * also replaces three per-layout urgency slots (.sl-urgency, .sl-lc-urgency,
  * .sl-dv-urgency) with one.
+ *
+ * OWNS ITS COLUMN. It returns the button's column AND the note as SIBLINGS, so
+ * the note is a direct child of the price+button row and can span it. Nested
+ * inside the column, it was trapped at the button's width — and, being one
+ * line, it dragged the column out to `max-content` and pushed the whole row
+ * past the card's padding, which is how the button ended up hanging off the
+ * page. `colClass` is the per-layout column, which each caller used to wrap
+ * this in.
  */
-export function CtaButton({ unit, config, full }: { unit: Unit; config: WidgetConfig; full?: boolean }) {
+export function CtaButton({ unit, config, full, colClass }: {
+  unit: Unit; config: WidgetConfig; full?: boolean; colClass: string;
+}) {
   const fullClass = full ? ' sl-select-full' : '';
 
   // Unavailable = no vacancy, or flagged waitlist. Reaching here means
@@ -281,7 +291,8 @@ export function CtaButton({ unit, config, full }: { unit: Unit; config: WidgetCo
   })();
 
   return (
-    <div className="sl-cta-group">
+    <>
+      <div className={colClass}>
       {waitlistCta ? (
         <button className={`sl-waitlist-btn${fullClass}`}>Join waitlist</button>
       ) : unavailable || callOnly ? (
@@ -321,9 +332,12 @@ export function CtaButton({ unit, config, full }: { unit: Unit; config: WidgetCo
           {config.ctaButtonCopy}
         </a>
       )}
+      </div>
+      {/* Outside the column, so it measures against the ROW. Both messages keep
+          the one slot they have always shared. */}
       {tiersError
         ? <div className="sl-limited-label" role="alert">Pricing is temporarily unavailable — please try again.</div>
         : note && <div className="sl-limited-label">{note}</div>}
-    </div>
+    </>
   );
 }

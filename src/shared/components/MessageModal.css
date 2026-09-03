@@ -67,8 +67,8 @@
   color: #637381; font: 400 16px 'Montserrat', sans-serif; cursor: pointer;
 }
 .pi-msg-dd-btn svg { flex: 0 0 auto; color: #101318; }
-/* Name and address left, "Change Property" right (Figma 10295-76697). A plain
-   div now — no background, no hover, nothing to click except the link. */
+/* Name and address left, Clear right (Figma 10295-76697). A plain div — no
+   background, no hover, nothing to click except that one button. */
 .pi-msg-facility {
   display: flex;
   align-items: flex-start;
@@ -105,24 +105,6 @@
 
 .pi-msg-facility-clear:hover { color: var(--hb-text-night, #101318); }
 
-.pi-msg-facility-change {
-  flex: 0 0 auto;
-  appearance: none;
-  -webkit-appearance: none;
-  padding: 0;
-  border: none;
-  border-radius: 0;
-  font: 400 16px 'Montserrat', sans-serif;
-  color: #101318;
-  text-decoration: underline;
-  cursor: pointer;
-}
-.pi-msg-facility-change,
-.pi-msg-facility-change:hover,
-.pi-msg-facility-change:focus,
-.pi-msg-facility-change:active { background: none; }
-.pi-msg-facility-change:hover { color: var(--color_1, #f45f30); }
-.pi-msg-facility-change:focus-visible { outline: 2px solid #101318; outline-offset: 2px; }
 .pi-msg-facility-name { font-size: 18px; font-weight: 600; color: #101318; }
 .pi-msg-facility-addr { display: flex; align-items: center; gap: 8px; font-size: 16px; color: #637381; }
 .pi-msg-facility-addr svg { flex: 0 0 auto; color: #637381; }
@@ -299,6 +281,25 @@
 .pi-msg-success .pi-msg-submit { width: auto; padding: 0 28px; }
 
 @media (max-width: 640px) {
+  /* Full-bleed sheet, the same treatment DateModal already uses on a phone.
+     The overlay's 24px gutter goes — that gutter IS the strip of dimmed
+     backdrop you could see around the card — and the sheet stretches to fill
+     what is left, so there is nothing behind it to show through. With no
+     gutter there is nothing for a radius, border or shadow to sit against
+     either, so all three go with it.
+     height: 100% of an `inset: 0` fixed overlay, deliberately, rather than
+     100vh: vh on mobile browsers measures past the address bar, which would
+     push the footer and its buttons below the fold. */
+  .pi-msg-overlay { padding: 0; align-items: stretch; }
+  .pi-msg-modal {
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    max-height: none;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
   .pi-msg-head { padding: 18px 20px; }
   .pi-msg-body { padding: 20px; }
   .pi-msg-foot { padding: 16px 20px; }

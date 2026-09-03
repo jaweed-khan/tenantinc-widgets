@@ -98,7 +98,10 @@ export function BlogCarousel({ posts, footer }: BlogCarouselProps) {
           <div
             className="sl-blog2-track"
             style={{
-              transform: `translateX(calc(${(carousel.offsetPct / 100).toFixed(6)} * 100%))`,
+              // The step is the card PITCH: one window plus the 10px flex gap
+              // between cards (see .sl-blog2-track). Stepping by 100% alone
+              // would leave the row 12px short with every press.
+              transform: `translateX(calc(${(carousel.offsetPct / 100).toFixed(6)} * (100% + 10px)))`,
               transition:
                 reduceMotion || carousel.dragging
                   ? 'none'

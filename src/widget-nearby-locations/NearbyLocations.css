@@ -72,6 +72,106 @@
   align-items: stretch;
 }
 
+/* ── Sliding track ───────────────────────────────────────────────────────
+   Built the same way #12's blog listing is, so the two feel identical: the
+   window clips, the track holds every COLUMN, and one transform moves it by
+   one column per step.
+
+   The window keeps .nl-grid's own `max-width: 1314px` and `margin: 0 auto` —
+   without them the row loses its centring and sits against the left edge.
+
+   Horizontally the margin is negative with NO matching padding, exactly as
+   #12's is. Each column carries `padding: 0 12px` to make the 24px gutter,
+   which also insets the outer two by 12px; widening the border box by that,
+   without padding it back, puts the first and last card flush with the widget
+   while the inner gaps stay 24px.
+
+   `overflow-x: clip` with `overflow-y: visible` lets the cards' shadow through
+   while still clipping the strip. `hidden` first is the fallback for Safari
+   < 16, which clips both axes rather than scrolling. */
+.nl-track-window {
+  width: 100%;
+  max-width: 1314px;
+  margin: 0 auto;
+  margin-inline: auto;
+  overflow: hidden;
+  overflow-x: clip;
+  overflow-y: visible;
+  touch-action: pan-y;
+  /* One step = one column = 1/per-view of the window's content box. The items
+     are sized by this same quantity, so the pitch and the travel cannot drift
+     apart. Set inline per frame: 3 on desktop, 1 on mobile. */
+  --nl-per-view: 3;
+  --nl-gap: 0px;
+  /* An item is its share of the window minus its share of the gaps; the step is
+     that item plus one gap. Kept as two quantities so a gap can never widen the
+     card itself — see the same split in #12. */
+  --nl-item: calc(
+    (100% - (var(--nl-per-view) - 1) * var(--nl-gap)) / var(--nl-per-view)
+  );
+  --nl-step: calc(var(--nl-item) + var(--nl-gap));
+}
+
+/* The desktop row bleeds its outer 12px so the cards sit flush with the widget;
+   the mobile frame has no such gutter to absorb. */
+@media (min-width: 641px) {
+  .nl-track-window { margin-inline: -12px; }
+}
+
+.nl-track {
+  display: flex;
+  align-items: stretch;
+  /* No `gap`: a gap is not part of the step the transform moves by, so it would
+     desync the slide from the card pitch a little further with every step. The
+     spacing is padding INSIDE each column instead, which IS part of the step. */
+  gap: 0;
+  will-change: transform;
+}
+
+/* A column, not a card — with `rows: 2` it holds two stacked, which is what
+   keeps that layout while still stepping one column at a time. */
+.nl-track-col {
+  flex: 0 0 var(--nl-item);
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+/* One card fills the mobile frame, so the desktop's 12px inset would pull it
+   off the widget's own gutter. The 10px Josh Wright asked for comes from the
+   track's flex gap instead — REAL space, so the cards are not touching as they
+   slide. Padding on the item would leave it butting the clip edge and the
+   neighbour would show through the rounded corner's notch. */
+.nl-track-window--mobile {
+  --nl-gap: 10px;
+  /* The card fills the frame here, so its shadow began exactly at the clip edge
+     and was sliced off down both sides. Push the clip out by one gap and pull
+     the box back by the same amount: the padding box (which is where `overflow`
+     clips) grows, while the CONTENT box — and so the card width and the step —
+     is untouched.
+     One gap is the most it can be. The neighbour sits one gap away, so at
+     exactly this width its edge lands on the seam; any wider and a sliver of the
+     next card shows past the widget. */
+  /* The width has to grow with the padding. `width: 100%` under the widget's
+     border-box sizing keeps the BORDER box at the panel's width, so padding
+     eats into the content and the negative margin only SHIFTS the box left —
+     which is what put 10px more space on the right than the left. Widening by
+     both gaps makes the negative margins symmetric again: the border box spans
+     one gap past each edge and the content box lands back on the panel's. */
+  width: calc(100% + 2 * var(--nl-gap));
+  padding-inline: var(--nl-gap);
+  margin-inline: calc(-1 * var(--nl-gap));
+}
+.nl-track-window--mobile .nl-track { gap: var(--nl-gap); }
+.nl-track-window--mobile .nl-track-col { padding: 0; }
+
+/* A card nobody can see casts no shadow. The neighbour is one gap away, so its
+   shadow reaches into the band we just opened and smudges the edge of the card
+   on screen — the same problem #12 solves with `.is-offscreen`. */
+.nl-track-window--mobile .nl-track-col[aria-hidden] .nl-card { filter: none; }
+
 /* ── Property card ──────────────────────────────────────────────────────── */
 
 .nl-card {

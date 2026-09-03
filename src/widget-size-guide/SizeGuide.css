@@ -111,6 +111,36 @@
   align-items: start;
 }
 
+/* Desktop: three per view, stepping one card, at EXACTLY the width .sg-grid
+   had — no negative margin, so it still lines up with the header above it and
+   stays centred in .sg-desktop.
+   The 24px between cards is a real flex gap and the step accounts for it: an
+   item is its share of the window minus its share of the gaps, the step is that
+   item plus one gap. Two quantities, because folding the gap into a single step
+   would widen the card itself and overhang the clip. */
+.sg-track-window--desk {
+  --sg-per-view: 3;
+  --sg-gap: 24px;
+  --sg-item: calc(
+    (100% - (var(--sg-per-view) - 1) * var(--sg-gap)) / var(--sg-per-view)
+  );
+  --sg-step: calc(var(--sg-item) + var(--sg-gap));
+}
+
+.sg-track-window--desk .sg-track {
+  gap: var(--sg-gap);
+}
+
+/* Scoped to its window, not left as a bare `.sg-track-item--desk`: the generic
+   `.sg-track-item` below carries `flex: 0 0 100%` at the SAME specificity and
+   sits later in the file, so it would win the tie on source order and the
+   desktop would show one card per view instead of three. */
+.sg-track-window--desk .sg-track-item--desk {
+  flex: 0 0 var(--sg-item);
+  box-sizing: border-box;
+  align-items: flex-start;
+}
+
 /* ── Size card ──────────────────────────────────────────────────────────── */
 
 .sg-card {
@@ -219,13 +249,61 @@
   background: #a5b4bf;
 }
 
+/* ── Mobile track ────────────────────────────────────────────────────────
+   One card per view, so the step is a plain 100% of the window — the pixel
+   step #12 and #07 use is only needed where perView > 1 and the items are
+   sized off the window rather than the track.
+   `touch-action: pan-y` lets a vertical scroll through the widget still work
+   while the horizontal drag is ours. */
+.sg-track-window {
+  width: 100%;
+  /* Clip X only, on the base rule rather than per-variant: the shorthand
+     `overflow: hidden` here would otherwise land AFTER --desk's longhands at the
+     same specificity and quietly win the tie, re-clipping the Y axis.
+     `hidden` first is the Safari < 16 fallback; `clip` is what lets the two axes
+     stay independent (pairing `hidden` with `visible` computes to `auto` and
+     adds a scrollbar). */
+  overflow: hidden;
+  overflow-x: clip;
+  overflow-y: visible;
+  touch-action: pan-y;
+}
+
+.sg-track {
+  display: flex;
+  align-items: stretch;
+  will-change: transform;
+}
+
+.sg-track-item {
+  flex: 0 0 100%;
+  min-width: 0;
+  display: flex;
+}
+
+/* Real space between cards as they slide, matching #07 and #12: the item
+   stays exactly one window wide and only the STEP grows by the gap. */
+.sg-track-window--mobile {
+  --sg-gap: 10px;
+  --sg-step: calc(100% + var(--sg-gap));
+}
+.sg-track-window--mobile .sg-track { gap: var(--sg-gap); }
+
+.sg-track-item > * {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 /* ── Mobile ─────────────────────────────────────────────────────────────── */
 
 @media (max-width: 768px) {
+  /* 24px, not the old 16px: #12 and #07 sit their mobile content inside a
+     full-bleed panel with 24px of its own padding, so the size guide was
+     8px tighter to the screen edge than every widget around it. */
   .sg-wrapper {
     gap: 32px;
-    padding-left: 16px;
-    padding-right: 16px;
+    padding-left: 24px;
+    padding-right: 24px;
   }
 
   /* Standard widget mobile title: 36px / 1.2 — matches .faq-title in #10, the

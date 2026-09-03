@@ -179,20 +179,85 @@ export function UtilityBar({
    * the bar was left with a band of the row's padding sitting above the header.
    * Nothing inside React can reach that, because it is not ours to render.
    *
-   * Walks up from our own node and hides what it finds, restoring the previous
-   * inline value on the way back — never a blanket `display: ''`, which would
-   * wipe a display the theme had set deliberately. Two levels: createWidget's
-   * mount div, then the element Duda handed it.
+   * Hides what it finds and restores the previous INLINE value AND its priority
+   * on the way back — never a blanket `display: ''`, which would wipe a display
+   * the theme had set deliberately.
+   *
+   * `none` goes on with `!important`. The chain is Duda's own furniture
+   * (`.flex-element`, `.widget-wrapper`, `.dmCustomWidget`), and Duda's flex
+   * layout states `display` on those from its own sheet — a plain inline value
+   * loses to any of those rules that carries `!important`, and we would be
+   * hiding nothing while appearing to. Nothing else here needs forcing: the
+   * host's `min-height: 10px` (the 10px band that survived) and its padding
+   * both stop applying the moment the box is gone.
+   *
+   * Two rules, because the chain has two different kinds of box in it:
+   *
+   * 1. The first two levels are collapsed unconditionally. They are
+   *    createWidget's mount div and the container Duda handed this widget
+   *    (`container.appendChild(mountEl)`), and BOTH exist solely for this
+   *    widget — so anything else Duda leaves inside them is this widget's too,
+   *    and goes with it. The previous version stopped dead at either one the
+   *    moment Duda left a second node there, which left the container's own
+   *    box on the page.
+   *
+   * 2. Above that the walk continues while every sibling PAINTS NOTHING, rather
+   *    than while the ancestor is a strict only-child. A Duda row routinely
+   *    carries zero-height helper divs beside the widget, and a single one of
+   *    those ended the walk even though it contributed nothing — leaving the
+   *    row's padding as the band that survived.
+   *
+   * The safety is unchanged and lives in rule 2: an ancestor holding anything
+   * with height is a row shared with real content, and hiding it would take
+   * that content with it, so the walk stops there. Zero height is the test
+   * because zero height is zero painted area — that is exactly the definition
+   * of leaving no trace.
    */
   const rootRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = rootRef.current;
-    if (!el) return undefined;
+    if (!el || !empty) return undefined;
+
+    /* Our own chain is excluded by the caller; this asks only whether the REST
+       of an ancestor's contents would still draw something. Text directly
+       inside it counts — a bare text node has no element to measure. */
+    const paintsNothing = (node: Node, skip: Node): boolean => {
+      if (node === skip) return true;
+      if (node.nodeType === Node.TEXT_NODE) return !node.textContent?.trim();
+      if (node.nodeType !== Node.ELEMENT_NODE) return true;
+      return (node as Element).getBoundingClientRect().height === 0;
+    };
+
     const nodes: HTMLElement[] = [];
-    for (let n = el.parentElement, i = 0; n && i < 2; n = n.parentElement, i++) nodes.push(n);
-    const previous = nodes.map((n) => n.style.display);
-    if (empty) nodes.forEach((n) => { n.style.display = 'none'; });
-    return () => { nodes.forEach((n, i) => { n.style.display = previous[i]; }); };
+    let child: HTMLElement = el;
+    let n: HTMLElement | null = el.parentElement;
+    // Rule 1 — the mount div and Duda's container for this widget.
+    for (let i = 0; i < 2 && n && n !== document.body; i++) {
+      nodes.push(n);
+      child = n;
+      n = n.parentElement;
+    }
+    // Rule 2 — keep going while nothing else up there would draw.
+    for (; n && n !== document.body; child = n, n = n.parentElement) {
+      const blank = Array.from(n.childNodes).every((c) => paintsNothing(c, child));
+      if (!blank) break;
+      nodes.push(n);
+    }
+
+    const previous = nodes.map((node) => ({
+      value: node.style.getPropertyValue('display'),
+      priority: node.style.getPropertyPriority('display'),
+    }));
+    nodes.forEach((node) => { node.style.setProperty('display', 'none', 'important'); });
+    return () => {
+      nodes.forEach((node, i) => {
+        const { value, priority } = previous[i];
+        // Removed, not set to '', so a host that had no inline display goes
+        // back to having none rather than to an empty declaration.
+        if (value) node.style.setProperty('display', value, priority);
+        else node.style.removeProperty('display');
+      });
+    };
   }, [empty]);
 
   const flag = getFlag();

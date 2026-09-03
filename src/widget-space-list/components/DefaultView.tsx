@@ -10,6 +10,7 @@ import {
   PlayCircleIcon,
 } from './Pricing';
 import defaultImg from '../assets/tenantinc-default.png';
+import { unitImageSrc, unitImageOnError } from './unitImage';
 
 const SIZE_LABEL: Record<UnitSize, string> = {
   other: 'Other',
@@ -51,9 +52,9 @@ export function DefaultCard({ unit, config }: { unit: Unit; config: WidgetConfig
         <div className="sl-dv-image-col">
           <img
             className="sl-dv-img"
-            src={unit.image || defaultImg}
+            src={unitImageSrc(unit, defaultImg)}
             alt="Storage Unit"
-            onError={(e) => { (e.target as HTMLImageElement).src = defaultImg; }}
+            onError={unitImageOnError(unit, defaultImg)}
           />
           <a href="#" className="sl-dv-see-fits">
             See what fits <PlayCircleIcon />
@@ -77,9 +78,7 @@ export function DefaultCard({ unit, config }: { unit: Unit; config: WidgetConfig
               <PriceBlock unit={unit} config={config} />
               {config.showJunkFeeDisclaimer && <JunkFeeDisclaimer config={config} />}
             </div>
-            <div className="sl-dv-btn-col">
-              <CtaButton unit={unit} config={config} full />
-            </div>
+            <CtaButton unit={unit} config={config} full colClass="sl-dv-btn-col" />
           </div>
         </div>
       </div>

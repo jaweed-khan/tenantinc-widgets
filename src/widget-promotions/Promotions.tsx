@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useMediaQuery } from '@shared/stickyStack';
-import { useSwipe } from '@shared/useSwipe';
+import { useCarousel, usePrefersReducedMotion } from '@shared/useCarousel';
+import { CarouselDots } from '@shared/CarouselDots';
 import './Promotions.css';
 import { fetchSpaceGroups, extractPromos, type ApiPromo } from './api';
 import cfg from './config.json';
@@ -142,7 +143,6 @@ function PromoBarItem({ item }: { item: BarItem }) {
 }
 
 function PromoBars({ items }: { items: BarItem[] }) {
-  const [offset, setOffset] = useState(0);
 
   /* How many fit at once. The two boundaries are the CSS's own — 560px is
      where the bars used to stack vertically, 900px where three and four across
@@ -160,17 +160,14 @@ function PromoBars({ items }: { items: BarItem[] }) {
    */
   const maxOffset = Math.max(0, items.length - visibleCount);
   const paged = maxOffset > 0;
-  // Clamp rather than store-and-correct, so a shrinking `items` (the API load
-  // replacing demo data) cannot leave us past the end.
-  const current = Math.min(offset, maxOffset);
-  const go = (i: number) => setOffset(Math.min(Math.max(i, 0), maxOffset));
 
-  // Dots and swipe. There are no flanking arrows: at four across they took a
-  // column's worth of room off the row.
-  const swipe = useSwipe({
-    onSwipeLeft: () => go(current + 1),
-    onSwipeRight: () => go(current - 1),
-  });
+  // The shared carousel hook owns the index, the bounds and the drag. This
+  // widget already slid a transform track one item at a time — what it gained
+  // here is a drag that FOLLOWS the finger (useSwipe only classified a finished
+  // gesture, so the row jumped after the fact) and the 6-dot cap.
+  const carousel = useCarousel({ count: items.length, perView: visibleCount, draggable: true });
+  const reduceMotion = usePrefersReducedMotion();
+  const current = carousel.index;
 
   if (!paged) {
     return (
@@ -183,20 +180,30 @@ function PromoBars({ items }: { items: BarItem[] }) {
   }
 
   return (
-    <div className="promo-bars-carousel" {...swipe.handlers}>
+    <div className="promo-bars-carousel">
       {/* The viewport clips; the track slides inside it. Clipping HERE is what
           makes this safe — the note this replaces avoided a transform track
           because Duda's row wrappers clip, but a track that never leaves its own
           viewport is never theirs to cut. */}
-      <div className="promo-bars-viewport">
+      <div className="promo-bars-viewport" {...carousel.handlers}>
         <div
           className="promo-bars promo-bars--track"
           data-cols={visibleCount}
           /* One number, because calc() cannot divide by a custom property in
              every engine. offset x step, where step = (100% + gap) / visible,
              is the same as (offset / visible) x (100% + gap) — so the division
-             happens here and the CSS only multiplies. */
-          style={{ '--promo-shift': current / visibleCount } as React.CSSProperties}
+             happens here and the CSS only multiplies.
+             Fed from offsetPct (not the index) so a finger drag moves the row
+             continuously rather than only snapping at the end of the gesture. */
+          style={{
+            // POSITIVE, because the CSS already applies the `* -1`. offsetPct is
+            // negative as it moves forward (it is a translate, not an index), so
+            // negating it here gives the positive offset the CSS expects — and
+            // it carries the live drag, not just the settled index.
+            '--promo-shift': (-carousel.offsetPct / 100) / visibleCount,
+            // No tween while a finger is down, or the row lags the thumb.
+            transition: reduceMotion || carousel.dragging ? 'none' : undefined,
+          } as React.CSSProperties}
         >
           {/* Every promotion is mounted, not just the visible window — that is
               what lets one transform carry the whole row past the edge. */}
@@ -214,32 +221,31 @@ function PromoBars({ items }: { items: BarItem[] }) {
           type="button"
           className="promo-pager-arrow"
           aria-label="Previous promotions"
-          disabled={current === 0}
-          onClick={() => go(current - 1)}
+          disabled={!carousel.canPrev}
+          onClick={carousel.prev}
         >
           <CarouselChevron dir="left" />
         </button>
 
-        <div className="promo-dots" role="tablist" aria-label="Promotion pages">
-          {Array.from({ length: maxOffset + 1 }, (_, i) => (
-            <button
-              key={i}
-              type="button"
-              className={`promo-dot${i === current ? ' promo-dot--active' : ''}`}
-              role="tab"
-              aria-selected={i === current}
-              aria-label={`Promotions ${i + 1} of ${maxOffset + 1}`}
-              onClick={() => go(i)}
-            />
-          ))}
+        {/* Capped at 6 with the window sliding — a property with 20 promotions
+            gives 20 stops, and that many dots would not fit the row. */}
+        <div className="promo-dots" aria-label="Promotion pages">
+          <CarouselDots
+            count={maxOffset + 1}
+            active={current}
+            onPick={carousel.goTo}
+            dotClass="promo-dot"
+            activeClass="promo-dot--active"
+            label="Go to promotions {n}"
+          />
         </div>
 
         <button
           type="button"
           className="promo-pager-arrow"
           aria-label="Next promotions"
-          disabled={current === maxOffset}
-          onClick={() => go(current + 1)}
+          disabled={!carousel.canNext}
+          onClick={carousel.next}
         >
           <CarouselChevron dir="right" />
         </button>

@@ -400,7 +400,7 @@ export function NearbySection() {
             <div
               className="sl-nb2-track"
               style={{
-                transform: `translateX(calc(${(carousel.offsetPct / 100).toFixed(6)} * 100%))`,
+                transform: `translateX(calc(${(carousel.offsetPct / 100).toFixed(6)} * (100% + 10px)))`,
                 transition:
                   reduceMotion || carousel.dragging
                     ? 'none'

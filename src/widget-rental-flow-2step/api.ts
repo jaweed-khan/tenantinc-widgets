@@ -664,16 +664,34 @@ async function getJsonV1(path: string, fresh = false): Promise<unknown> {
  */
 const AVAILABLE_PAGE_SIZE = 100;
 
-async function fetchAvailableUnits(ctx: RentalCtx, fresh = false): Promise<ApiUnitRow[]> {
+/**
+ * Page through availability, STOPPING as soon as the caller has what it needs.
+ *
+ * `enough` is not an optimisation, it is the difference between one request and
+ * fourteen. This property carries 1308 available units, so walking the whole
+ * list is 14 pages — and each one costs a CORS preflight as well as the fetch,
+ * about 1.7s a page. Both callers were doing that on arrival, so the page spent
+ * roughly HALF A MINUTE fetching inventory to answer a question about one unit.
+ *
+ * Without a predicate this still walks everything, which is why nothing calls
+ * it that way.
+ */
+async function fetchAvailableUnits(
+  ctx: RentalCtx,
+  opts: { fresh?: boolean; enough?: (all: ApiUnitRow[]) => boolean } = {},
+): Promise<ApiUnitRow[]> {
   const all: ApiUnitRow[] = [];
   let offset = 0;
+  // 25 is a stop against a malformed `total`, not an expected number of pages.
   for (let page = 0; page < 25; page += 1) {
     const data = unwrap(await getJsonV1(
       `companies/${ctx.companyId}/properties/${ctx.propertyId}/units/available?limit=${AVAILABLE_PAGE_SIZE}&offset=${offset}`,
-      fresh,
+      opts.fresh,
     ));
     const rows = (data?.units as ApiUnitRow[] | undefined) ?? [];
     all.push(...rows);
+    // Checked after every page, so the common case costs exactly one request.
+    if (opts.enough?.(all)) break;
     const total = Number((data?.paging as { total?: number } | undefined)?.total ?? all.length);
     offset += rows.length;
     if (!rows.length || all.length >= total) break;
@@ -682,8 +700,20 @@ async function fetchAvailableUnits(ctx: RentalCtx, fresh = false): Promise<ApiUn
 }
 
 export async function findUnitForSelection(ctx: RentalCtx, size?: string, price?: number, fresh = false, unitTypeId?: string): Promise<{ id: string; number?: string; unitTypeId?: string; spaceMixId?: string } | undefined> {
-  const units = await fetchAvailableUnits(ctx, fresh);
-  const wantSize = size ? size.toLowerCase().replace(/[^0-9x.]/g, '') : undefined;
+  const wantDims = size ? size.toLowerCase().replace(/[^0-9x.]/g, '') : undefined;
+  const units = await fetchAvailableUnits(ctx, {
+    fresh,
+    /*
+     * One page is almost always enough: we need A unit of the right size, not
+     * every unit of it. Only a size that appears late in the list costs more
+     * than one request, and a size with none at all still walks the lot —
+     * which is correct, since that is the only way to be sure.
+     */
+    enough: (all) => all.some((u) => u.state === 'Available'
+      && (!wantDims || unitDims(u) === wantDims)),
+  });
+  // Same value as wantDims above; kept under its original name for the filter.
+  const wantSize = wantDims;
   /*
    * NO FILTER ON `u.type`.
    *
@@ -730,10 +760,37 @@ export async function findUnitForSelection(ctx: RentalCtx, size?: string, price?
  *  the type id is what narrows the protection plans to the space type rented.
  *  Fails soft — an unresolvable unit must never stop the rental. */
 export async function fetchUnitInfo(ctx: RentalCtx, unitId: string): Promise<{ number?: string; unitTypeId?: string; spaceMixId?: string }> {
+  /*
+   * ONE unit, asked for by id.
+   *
+   * GET v1/companies/{co}/units/{id} returns the row under `data.unit` in about
+   * 300ms. Searching units/available for it instead meant paging a 1308-unit
+   * list — up to fourteen requests, each with its own CORS preflight, roughly
+   * 24 seconds — to answer a question about a unit whose id we already had from
+   * the URL.
+   *
+   * It also answers for a unit that is ALREADY HELD, which units/available
+   * cannot: a held unit leaves that list entirely. So this works whether the
+   * read happens before or after the hold, where the list only worked before.
+   *
+   * Verified 2026-09-03: 200 in ~296ms for a held unit, carrying number,
+   * space_mix_id and unit_type_id.
+   */
   try {
-    // Paged for the same reason as findUnitForSelection: on the default page a
-    // unit past the first 20 simply is not there, and "Space #…" came up blank.
-    const units = await fetchAvailableUnits(ctx);
+    const inner = await getJsonV1(`companies/${ctx.companyId}/units/${encodeURIComponent(unitId)}`);
+    const u = (unwrap(inner) as { unit?: ApiUnitRow } | undefined)?.unit;
+    if (u?.id) return { number: u.number, unitTypeId: u.unit_type_id, spaceMixId: u.space_mix_id };
+  } catch { /* fall through to the list */ }
+
+  /*
+   * Fallback, kept because the per-unit route is undocumented: page the list
+   * and stop at whichever page carries the unit. Only reached if the direct
+   * read fails or returns nothing.
+   */
+  try {
+    const units = await fetchAvailableUnits(ctx, {
+      enough: (all) => all.some((u) => u.id === unitId),
+    });
     const u = units.find((x) => x.id === unitId);
     return { number: u?.number, unitTypeId: u?.unit_type_id, spaceMixId: u?.space_mix_id };
   } catch { return {}; }

@@ -23,19 +23,43 @@
 // note at the return.
 // ===========================================================================
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import storelocalLogo from '../widget-navigation-bar/Storelocal_logo.png';
 
-/** How long the simulated wrap-up runs before `onDone`. */
+/** How long the wrap-up runs before `onDone`, once there is nothing to wait for. */
 const DEFAULT_DURATION_MS = 3200;
 /** Bar refresh interval — 60ms is smooth without thrashing React. */
 const TICK_MS = 60;
+/**
+ * While `waiting`, the bar eases toward this and stops.
+ *
+ * It must never reach 100% with a request still in flight: a full bar that then
+ * sits there is the "raced to the end and stalled" pattern the header warns
+ * about, and it reads as a hang rather than as work.
+ */
+const WAIT_CAP_PCT = 90;
+/**
+ * How long the bar takes to creep to the cap. Deliberately much longer than the
+ * finish, so it is still moving through a slow call rather than parked.
+ */
+const WAIT_DURATION_MS = 15000;
+/** Once the wait ends, the run from wherever the bar is to 100%. */
+const FINISH_MS = 700;
 
 export function ProcessingModal({
-  open, firstName, facilityName, durationMs = DEFAULT_DURATION_MS, onDone, note,
+  open, firstName, facilityName, durationMs = DEFAULT_DURATION_MS, onDone, note, waiting = false,
 }: {
   open: boolean;
+  /**
+   * A request is still in flight, so do not finish.
+   *
+   * The modal opens the moment Pay Now is pressed rather than after the rental
+   * returns — several seconds of a disabled button told the shopper nothing.
+   * While this is true the bar creeps toward WAIT_CAP_PCT and `onDone` is never
+   * called; when it goes false the bar completes and the flow moves on.
+   */
+  waiting?: boolean;
   /** Greeted by name in the heading, as the design shows ("John, we're …"). */
   firstName?: string;
   facilityName?: string;
@@ -44,18 +68,77 @@ export function ProcessingModal({
   /** Extra line under the copy — the demo banner on the prototype bridge. */
   note?: React.ReactNode;
 }) {
-  const [elapsed, setElapsed] = useState(0);
+  const [pct, setPct] = useState(0);
+  /*
+   * Everything the timer needs lives in refs, and the effect depends only on
+   * things that should genuinely restart it.
+   *
+   * THE BAR USED TO JUMP BACK TO ZERO once a second. `onDone` was in the
+   * dependency list and the caller passes an inline arrow, so it is a new
+   * function on every render — and the parent re-renders every second because
+   * the hold countdown ticks. Each of those tore the effect down and rebuilt
+   * it, resetting the start time and, mid-wait, the bar with it.
+   */
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
+  /** When the CURRENT phase began — not when the effect last happened to run. */
+  const startedRef = useRef(0);
+  /** Which phase that timestamp belongs to, so a re-run can tell it is the same one. */
+  const phaseRef = useRef<'wait' | 'finish' | null>(null);
+  /** Where the bar stood when the wait ended; the finish runs from there. */
+  const handoffRef = useRef(0);
+  /** Latest value, readable without making `pct` an effect dependency. */
+  const pctRef = useRef(0);
+  pctRef.current = pct;
 
   useEffect(() => {
-    if (!open) { setElapsed(0); return; }
+    if (!open) {
+      setPct(0);
+      pctRef.current = 0;
+      handoffRef.current = 0;
+      phaseRef.current = null;
+      return undefined;
+    }
 
-    const started = Date.now();
+    const phase: 'wait' | 'finish' = waiting ? 'wait' : 'finish';
+    // Only a genuine phase CHANGE restarts the clock. A re-render does not.
+    if (phaseRef.current !== phase) {
+      phaseRef.current = phase;
+      startedRef.current = Date.now();
+      if (phase === 'finish') handoffRef.current = pctRef.current;
+    }
+
+    /*
+     * Two phases, one timer.
+     *
+     * WAITING: ease toward the cap over WAIT_DURATION_MS and stay there. onDone
+     *   is never called, so nothing downstream fires while the request is out.
+     * FINISHING: ease from wherever the bar reached to 100 over FINISH_MS, then
+     *   onDone once.
+     *
+     * Ease-out in both, so it moves confidently at first and settles rather
+     * than crawling linearly — it reads as "working", not "stuck".
+     */
+    const from = phase === 'wait' ? 0 : handoffRef.current;
+    const span = phase === 'wait'
+      ? WAIT_DURATION_MS
+      // Straight to finish with no wait behind it is the preview path, which
+      // keeps its original full-length animation.
+      : (from > 0 ? FINISH_MS : durationMs);
+    const target = phase === 'wait' ? WAIT_CAP_PCT : 100;
+    let fired = false;
+
     const id = window.setInterval(() => {
-      const next = Date.now() - started;
-      setElapsed(next);
-      if (next >= durationMs) {
+      const t = Math.min(1, (Date.now() - startedRef.current) / span);
+      const eased = 1 - (1 - t) ** 2;
+      const next = from + (target - from) * eased;
+      // MONOTONIC. Whatever else happens, the bar never goes backwards — that
+      // is the one thing a progress bar must not do.
+      setPct((cur) => (next > cur ? next : cur));
+      if (phase === 'finish' && t >= 1 && !fired) {
+        fired = true;
         window.clearInterval(id);
-        onDone?.();
+        onDoneRef.current?.();
       }
     }, TICK_MS);
 
@@ -66,14 +149,14 @@ export function ProcessingModal({
       window.clearInterval(id);
       document.body.style.overflow = prev;
     };
-  }, [open, durationMs, onDone]);
+    // onDone is deliberately absent: it is read through a ref. Including it
+    // restarts this effect on every parent render, which is the bug above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, durationMs, waiting]);
 
   if (!open) return null;
 
-  // Ease-out so it moves confidently at first and settles, rather than crawling
-  // linearly — reads as "working" instead of "stuck".
-  const t = Math.min(1, elapsed / durationMs);
-  const pct = Math.round((1 - (1 - t) ** 2) * 100);
+  const shown = Math.round(pct);
 
   const greeting = firstName?.trim();
 
@@ -93,10 +176,10 @@ export function ProcessingModal({
           role="progressbar"
           aria-valuemin={0}
           aria-valuemax={100}
-          aria-valuenow={pct}
+          aria-valuenow={shown}
           aria-label="Finalizing your lease and payment"
         >
-          <div className="rf-proc-bar-fill" style={{ width: `${pct}%` }} />
+          <div className="rf-proc-bar-fill" style={{ width: `${shown}%` }} />
         </div>
 
         <p className="rf-proc-copy">

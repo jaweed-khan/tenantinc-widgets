@@ -224,8 +224,20 @@ img.promo-banner-img {
   width: auto;
   /* The TITLE's size, set on the row and inherited by it — nothing else in
      here is text. Held one level up so the row's own line box matches the
-     heading's, which is what `align-items: flex-start` aligns the marks to. */
-  font-size: clamp(24px, 4.5vw, 50px);
+     heading's, which is what `align-items: flex-start` aligns the marks to.
+     42px, down from 50: a single promotion runs the full width, so the cap is
+     reached on any ordinary desktop and 50 was the largest type on the page. */
+  font-size: clamp(24px, 4.5vw, 42px);
+}
+/* Tablet, 2px off. The band between this file's own two boundaries — 560 is
+   where the bars become a one-per-slide carousel, 901 where the desktop rules
+   start — so it lines up with how the rest of the widget is split.
+   The cap is untouched: 4.5vw never reaches 42px below 900px anyway, so the
+   subtraction has to come off the fluid middle term to have any effect. */
+@media (min-width: 561px) and (max-width: 900px) {
+  .promo-bars[data-cols='1'] .promo-bar-titlerow {
+    font-size: clamp(24px, calc(4.5vw - 2px), 42px);
+  }
 }
 .promo-bars[data-cols='1'] .promo-bar-titlewrap {
   flex: 0 1 auto;
@@ -458,7 +470,14 @@ img.promo-banner-img {
   transition: background 0.15s;
 }
 .promo-pager-arrow:hover:not(:disabled) { background: #f4f6f8; }
-.promo-pager-arrow:disabled { color: #a5b4bf; cursor: default; }
+/* 50% and inert at the ends — the agreed signal that there is nothing further
+   this way (was a grey colour swap, which read as a different icon rather than
+   a disabled one). */
+.promo-pager-arrow:disabled {
+  opacity: 0.5;
+  cursor: default;
+  pointer-events: none;
+}
 
 /* Dots only on a phone. The row is one card across down here and already
    swipes (useSwipe in Promotions.tsx), so the chevrons are a second way to do
@@ -580,7 +599,12 @@ img.promo-banner-img {
    Clipping happens on OUR viewport. The fade this replaces existed because
    Duda's row wrappers clip with overflow:hidden and would have cut a track —
    but a track that never leaves its own viewport is never theirs to cut. */
-.promo-bars-viewport { overflow: hidden; }
+/* `touch-action: pan-y` keeps a vertical drag scrolling the page while a
+   horizontal one belongs to the carousel — see @shared/useCarousel. */
+.promo-bars-viewport {
+  touch-action: pan-y;
+  overflow: hidden;
+}
 
 .promo-bars--track {
   flex-wrap: nowrap;
@@ -669,7 +693,9 @@ img.promo-banner-img {
   color: #101318;
 }
 
-/* 32px button holding an 18px glyph, per the design. */
+/* 32px box holding the 32px mark, desktop and mobile — .pi-msg-close in the
+   shared "Send us a Message" modal, which is the contact-popup standard. The
+   SVG fills the box, so box and mark are one number. */
 .promo-modal-close {
   display: flex;
   align-items: center;
@@ -685,6 +711,12 @@ img.promo-banner-img {
   cursor: pointer;
   transition: background 0.15s;
 }
+
+/* Pinned, not left to the width ATTRIBUTE: a Duda theme sheet styling bare
+   `svg { width: ... }` outranks an attribute, which is how the same mark came
+   out undersized in the rental flow. Invisible in the dev harness — there is no
+   theme sheet there to lose to. Same guard as .pi-msg-close svg. */
+.promo-modal-close svg { flex: 0 0 auto; width: 32px !important; height: 32px !important; }
 
 .promo-modal-close:hover {
   background: #f4f6f8;

@@ -1585,12 +1585,11 @@ function O2Card({ card }: { card: O2Tier }) {
             ))}
           </ul>
         </div>
-        <div className="ts-o2-foot">
+        <div className="ts-o2-foot ts-o2-foot--no-promo">
           <div className="ts-o2-foot-top">
             <div className="ts-o2-price"><span className="ts-o2-amt ts-o2-amt--soldout">Sold Out</span></div>
           </div>
           <div className="ts-o2-foot-bottom">
-            <div className="ts-o2-promo-slot" />
             <TierSelectCta tierKey={card.key} selected={false} soldOut />
           </div>
         </div>
@@ -1619,7 +1618,7 @@ function O2Card({ card }: { card: O2Tier }) {
               {f.star ? (
                 <PromoStar size={22} className="ts-o2-feat-star" />
               ) : (
-                <CheckCircle size={24} className="ts-o2-feat-check" />
+                <CheckCircle size={20} className="ts-o2-feat-check" />
               )}
               <span>{f.label}</span>
             </li>
@@ -1758,7 +1757,7 @@ function O2MExpanded({ card }: { card: O2Tier }) {
             {f.star ? (
               <PromoStar size={22} className="ts-o2-feat-star" />
             ) : (
-              <CheckCircle size={24} className="ts-o2-feat-check" />
+              <CheckCircle size={20} className="ts-o2-feat-check" />
             )}
             <span>{f.label}</span>
           </li>

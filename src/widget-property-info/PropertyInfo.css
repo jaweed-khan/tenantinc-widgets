@@ -692,11 +692,35 @@
   .pi-lb-thumb { flex-basis: calc((100% - 3 * 6px) / 4); }
 }
 
+/* The window the track slides inside. It keeps the exact box it had — only
+   `overflow: hidden` and the track within it are new, so the photo is framed
+   and sized as before. */
 .pi-lb-img-wrap {
   width: min(90vw, 1000px);
   height: min(80vh, 680px);
   max-width: 100%;
   cursor: default;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.pi-lb-track {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  height: 100%;
+  will-change: transform;
+}
+
+/* One window wide, so the step the transform moves by and the cell width are
+   the same quantity — no gap here, deliberately: a gap would have to be added
+   to the step, and a lightbox has nothing to show between two photos anyway. */
+.pi-lb-cell {
+  flex: 0 0 100%;
+  min-width: 0;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;

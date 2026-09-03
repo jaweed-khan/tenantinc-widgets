@@ -9,6 +9,8 @@ import {
 } from './icons';
 import { fetchAllReviewSources, type ReviewSourceData } from '@shared/reviewsCollections';
 import { Shimmer } from '@shared/Shimmer';
+import { useCarousel, usePrefersReducedMotion } from '@shared/useCarousel';
+import { CarouselDots } from '@shared/CarouselDots';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -129,19 +131,103 @@ function ReviewCard({ review, source }: { review: Review; source: ReviewSource }
   );
 }
 
-function Pagination({ page, total, onPrev, onNext, onDot }: {
+/**
+ * One source column with its OWN pager.
+ *
+ * Josh Wright asked for "their own carousel dots per column instead of scrolling
+ * the whole section" (2026-08-27): Google and Yelp hold different numbers of
+ * reviews, so a single shared page number ran one column out of cards while the
+ * other still had plenty, and paging moved both at once.
+ *
+ * A component per column rather than state in the parent, because each column
+ * needs its own hook and hooks cannot be called inside a `.map()`.
+ *
+ * The cards stay a 2-up vertical grid — `.rw-column-cards` equalises row heights
+ * ACROSS the columns, so Google's first card lines up with Yelp's. Sliding the
+ * column would break that alignment, which is the "retaining the testimonials
+ * layout" Josh asked about, so the page swap is kept and the dots are what move.
+ */
+function SourceColumn({ source }: { source: ReviewSource }) {
+  const totalPages = Math.max(1, Math.ceil(source.reviews.length / REVIEWS_PER_PAGE));
+  const carousel = useCarousel({ count: totalPages, perView: 1 });
+  const reduceMotion = usePrefersReducedMotion();
+
+  /* Pages, not cards, and that is the shape of this view rather than a
+     shortcut: a column stacks REVIEWS_PER_PAGE reviews VERTICALLY, so there is
+     no horizontal card to step past — the unit that moves is the pair. #12 and
+     #07 step one card because theirs sit side by side.
+     The strip holds every page and one transform moves it; the slice-and-swap
+     this replaces re-rendered a different pair into a static grid, which is a
+     cut with nothing on screen to animate. */
+  const pages = Array.from(
+    { length: totalPages },
+    (_, i) => source.reviews.slice(i * REVIEWS_PER_PAGE, i * REVIEWS_PER_PAGE + REVIEWS_PER_PAGE),
+  );
+
+  return (
+    <div className="rw-column">
+      <SourceHeader source={source} />
+      <div className="rw-track-window">
+        <div
+          className="rw-track"
+          style={{
+            transform: `translateX(calc(${(carousel.offsetPct / 100).toFixed(6)} * 100%))`,
+            transition: reduceMotion ? 'none' : 'transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1)',
+          }}
+        >
+          {pages.map((page, i) => (
+            <div className="rw-track-page" key={i} aria-hidden={i === carousel.index ? undefined : true}>
+              <div className="rw-column-cards">
+                {page.map((review) => (
+                  <ReviewCard key={review.id} review={review} source={source} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Only when this column has more than one page of its own. */}
+      {totalPages > 1 && (
+        <Pagination
+          page={carousel.index}
+          total={totalPages}
+          onPrev={carousel.prev}
+          onNext={carousel.next}
+          onDot={carousel.goTo}
+          canPrev={carousel.canPrev}
+          canNext={carousel.canNext}
+        />
+      )}
+    </div>
+  );
+}
+
+function Pagination({ page, total, onPrev, onNext, onDot, canPrev, canNext }: {
   page: number; total: number;
   onPrev: () => void; onNext: () => void; onDot: (i: number) => void;
+  /* Optional so the mobile pager, which still owns its own bounds, can omit
+     them and keep the original first/last comparison. */
+  canPrev?: boolean; canNext?: boolean;
 }) {
+  const prevOff = canPrev === undefined ? page === 0 : !canPrev;
+  const nextOff = canNext === undefined ? page === total - 1 : !canNext;
+
   return (
     <div className="rw-pagination">
-      <button className="rw-page-btn rw-page-btn-prev" onClick={onPrev} disabled={page === 0} aria-label="Previous">
+      <button className="rw-page-btn rw-page-btn-prev" onClick={onPrev} disabled={prevOff} aria-label="Previous">
         <ChevronRight size={40} />
       </button>
-      {Array.from({ length: total }).map((_, i) => (
-        <button key={i} className={`rw-page-dot${i === page ? ' active' : ''}`} onClick={() => onDot(i)} aria-label={`Page ${i + 1}`} />
-      ))}
-      <button className="rw-page-btn" onClick={onNext} disabled={page === total - 1} aria-label="Next">
+      {/* Capped at 6 with the window sliding — a source with 40 reviews is 20
+          pages, and 20 dots would not fit under a column. */}
+      <CarouselDots
+        count={total}
+        active={page}
+        onPick={onDot}
+        dotClass="rw-page-dot"
+        label="Go to page {n}"
+      />
+      <button className="rw-page-btn" onClick={onNext} disabled={nextOff} aria-label="Next">
         <ChevronRight size={40} />
       </button>
     </div>
@@ -195,30 +281,28 @@ export function Reviews({
     return () => { cancelled = true; };
   }, []);
 
-  const totalDesktopPages = Math.max(1, ...sources.map((s) => Math.ceil(s.reviews.length / REVIEWS_PER_PAGE)));
-  const [desktopPage, setDesktopPage] = useState(0);
   const [mobileSourceIdx, setMobileSourceIdx] = useState(0);
-  const [mobilePage, setMobilePage] = useState(0);
 
   const mobileSource = sources[Math.min(mobileSourceIdx, sources.length - 1)] ?? sources[0];
   const totalMobilePages = mobileSource.reviews.length;
 
-  // Which way the next card slides in from. Tracked rather than derived inside
-  // the setter, because setMobilePage is also called with an absolute index by
-  // the dots — comparing against the current page is what makes tapping dot 4
-  // from dot 1 slide forwards rather than always one fixed direction.
-  const [mobileDir, setMobileDir] = useState<1 | -1>(1);
-
-  function goToMobilePage(next: number) {
-    const clamped = Math.max(0, Math.min(totalMobilePages - 1, next));
-    setMobileDir(clamped >= mobilePage ? 1 : -1);
-    setMobilePage(clamped);
-  }
+  // One review at a time, dragged with the finger — the same shared hook the
+  // other carousels use, so the feel and the 6-dot cap are identical.
+  //
+  // This replaces a remount-and-replay-a-keyframe approach: the card used to be
+  // keyed by source+page so React rebuilt it, and a CSS animation faded it in
+  // from 28px away. That read as a fade rather than a slide, could not follow a
+  // finger, and needed a `mobileDir` state purely to choose which keyframe to
+  // play. A real track moving under a clip needs none of that.
+  const mobileCarousel = useCarousel({ count: totalMobilePages, perView: 1, draggable: true });
+  const reduceMotion = usePrefersReducedMotion();
+  const mobilePage = mobileCarousel.index;
 
   function switchMobileSource(idx: number) {
     setMobileSourceIdx(idx);
-    setMobileDir(1);
-    setMobilePage(0);
+    // Each source has its own review list, so a switch has to rewind — index 7
+    // of Google is meaningless once Yelp's list is showing.
+    mobileCarousel.goTo(0);
   }
 
   // Skeleton until the collections answer: two source columns of cards, matching
@@ -275,30 +359,15 @@ export function Reviews({
           <p className="rw-subtitle">{subheading}</p>
         </div>
 
+        {/* Each column pages itself — see SourceColumn. There is deliberately no
+            pager for the section as a whole any more: Google and Yelp hold
+            different numbers of reviews, so one shared page number ran the
+            shorter column out of cards while the other still had plenty. */}
         <div className="rw-columns">
-          {sources.map((source) => {
-            const start = desktopPage * REVIEWS_PER_PAGE;
-            const pageReviews = source.reviews.slice(start, start + REVIEWS_PER_PAGE);
-            return (
-              <div key={source.key} className="rw-column">
-                <SourceHeader source={source} />
-                <div className="rw-column-cards">
-                  {pageReviews.map((review) => (
-                    <ReviewCard key={review.id} review={review} source={source} />
-                  ))}
-                </div>
-              </div>
-            );
-          })}
+          {sources.map((source) => (
+            <SourceColumn key={source.key} source={source} />
+          ))}
         </div>
-
-        <Pagination
-          page={desktopPage}
-          total={totalDesktopPages}
-          onPrev={() => setDesktopPage((p) => Math.max(0, p - 1))}
-          onNext={() => setDesktopPage((p) => Math.min(totalDesktopPages - 1, p + 1))}
-          onDot={setDesktopPage}
-        />
       </div>
 
       {/* ── Mobile layout ───────────────────────────────────────────────── */}
@@ -321,23 +390,43 @@ export function Reviews({
 
         <div className="rw-mobile-body">
           <SourceHeader source={mobileSource} />
-          {/* key by source+page so React REMOUNTS the card on every change —
-              that is what replays the CSS animation. Without the key it would
-              patch the text in place and the slide would only ever run once. */}
-          <div
-            key={`${mobileSource.key}-${mobilePage}`}
-            className={`rw-slide rw-slide--${mobileDir > 0 ? 'next' : 'prev'}`}
-          >
-            <ReviewCard review={mobileSource.reviews[mobilePage]} source={mobileSource} />
+          {/* Every review of the selected source renders once and one transform
+              slides the row; the window clips the rest. The item must stay
+              exactly one window wide or the pitch stops matching the distance
+              the transform steps by, and the cards drift with every step. */}
+          <div className="rw-mobile-track-window" {...mobileCarousel.handlers}>
+            <div
+              className="rw-mobile-track"
+              style={{
+                transform: `translateX(calc(${(mobileCarousel.offsetPct / 100).toFixed(6)} * (100% + 10px)))`,
+                transition:
+                  reduceMotion || mobileCarousel.dragging
+                    ? 'none'
+                    : 'transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1)',
+              }}
+            >
+              {mobileSource.reviews.map((review, i) => (
+                <div
+                  className="rw-mobile-track-item"
+                  key={review.id}
+                  {...(i === mobilePage ? {} : { inert: '' as unknown as boolean })}
+                  aria-hidden={i === mobilePage ? undefined : true}
+                >
+                  <ReviewCard review={review} source={mobileSource} />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
         <Pagination
           page={mobilePage}
           total={totalMobilePages}
-          onPrev={() => goToMobilePage(mobilePage - 1)}
-          onNext={() => goToMobilePage(mobilePage + 1)}
-          onDot={goToMobilePage}
+          onPrev={mobileCarousel.prev}
+          onNext={mobileCarousel.next}
+          onDot={mobileCarousel.goTo}
+          canPrev={mobileCarousel.canPrev}
+          canNext={mobileCarousel.canNext}
         />
       </div>
 

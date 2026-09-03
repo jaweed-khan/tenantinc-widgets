@@ -78,6 +78,14 @@ module.exports = (_env, argv) => {
           test: /\.(png|jpe?g|gif|svg|webp)$/i,
           type: 'asset/inline',
         },
+        {
+          // Same reason, plus one of its own: the rental flow's card frames are
+          // documents on Global Payments' origin, so they cannot fetch a font
+          // from us or from Google. Inlined here, the face travels to them as a
+          // data: URI inside an @font-face rule. See gpHostedFields.ts.
+          test: /\.woff2?$/i,
+          type: 'asset/inline',
+        },
       ],
     },
 

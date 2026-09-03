@@ -24,6 +24,11 @@
 // CDN blinked is worse than one that is merely less private.
 // ===========================================================================
 
+/* Inlined by webpack as a data: URI (asset/inline). It has to be a data: URI
+   rather than a URL: the frames are on GP's origin and can fetch nothing of
+   ours. Printable-ASCII subset of Montserrat 400 — see FIELD_STYLES. */
+import montserratWoff2 from './assets/montserrat-400-ascii.woff2';
+
 /** Officially Heartland-hosted; `hps.github.io` serves a byte-identical copy. */
 const LIB = 'https://api2.heartlandportico.com/SecureSubmit.v1/token/gp-1.0.0/globalpayments.js';
 
@@ -111,16 +116,42 @@ export interface MountHostedCardOptions {
  */
 const FIELD_STYLES: Record<string, Record<string, string> | string> = {
   /*
-   * The webfont, INSIDE the frame.
+   * THE WEBFONT, CARRIED INTO THE FRAME AS A DATA: URI.
    *
-   * field.html is served from GP's origin, so it inherits nothing from this
-   * page — not our @font-face, not the family on .rf-wrapper. `font-family:
-   * inherit`, which is what this used to say, therefore resolved against GP's
-   * own document and landed on its default, which is why the digits were not
-   * Montserrat while everything around them was. The frame has to fetch the
-   * font itself.
+   * This block used to say the font could not be loaded here at all. That was
+   * wrong, and wrong for a reason worth keeping: it tested @import and then
+   * generalised from it. Re-verified against the gp-1.0.0 globalpayments.js
+   * production actually loads —
+   *
+   *   - json2css() emits a STRING value as a declaration (`key:value;`) and an
+   *     OBJECT value as a rule (`key{…}`). @import has no block, so it can only
+   *     ever be emitted as the invalid declaration `@import:url(…);` — true,
+   *     and the reason that route failed. But @font-face IS a block, so as a
+   *     nested object it serialises to exactly the rule we want.
+   *   - The stylesheet is injected INSIDE the frame: IframeField.addStylesheet
+   *     posts the CSS to the frame, whose handler calls addStylesheet(), which
+   *     appends a <style> to its own <head>. Our rules already reach it — that
+   *     is how everything below works.
+   *   - A data: URI needs no fetch and no CORS, so the frame's origin stops
+   *     mattering. field.html (hps.github.io) sends no CSP header at all, so
+   *     there is nothing to forbid it.
+   *
+   * The face is subsetted to printable ASCII — 9.5KB, against 16.5KB for the
+   * full latin subset — since all these two frames can ever show is a card
+   * number, an expiry, and their two placeholders.
    */
-  '@import': "url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap')",
+  '@font-face': {
+    'font-family': "'Montserrat'",
+    'font-style': 'normal',
+    // Only 400 is inlined: nothing in these frames asks for another weight.
+    'font-weight': '400',
+    // Quoted, so the base64 payload cannot terminate the url() token early.
+    src: `url("${montserratWoff2}") format('woff2')`,
+    // The digits must not render in a fallback face for a frame or two and then
+    // reflow. There is no network fetch to wait on, so there is nothing to gain
+    // by swapping.
+    'font-display': 'block',
+  },
 
   '#secure-payment-field': {
     // The frame is exactly the box the value occupies, and .rf-gpfield has
@@ -141,9 +172,11 @@ const FIELD_STYLES: Record<string, Record<string, string> | string> = {
     'box-shadow': 'none',
     background: 'transparent',
     color: '#101318',
-    // Named, not `inherit` — see the @import above. The stack after it is the
-    // kit's own, so an environment that cannot fetch the webfont degrades the
-    // same way the rest of the flow does rather than to GP's default.
+    // Named, not `inherit`: the frame is a separate document and inherits
+    // nothing from us. Montserrat now resolves against the @font-face above;
+    // the stack after it is the kit's own, so an environment that somehow
+    // cannot use the inlined face degrades the same way the rest of the flow
+    // does rather than to GP's default.
     'font-family': "'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
     /*
      * Pinned, and the browser told to leave it alone.
@@ -173,7 +206,22 @@ const FIELD_STYLES: Record<string, Record<string, string> | string> = {
     'border-bottom': '0',
     'box-shadow': 'none',
   },
-  '#secure-payment-field::placeholder': { color: 'transparent' },
+  /*
+   * The frame's placeholder IS the label for a hosted cell, and the parent
+   * draws none. Only the frame knows whether it is empty — GP reports neither
+   * length nor emptiness — so anything the parent drew had to infer it, and
+   * every available inference was wrong in one direction: over live digits, or
+   * stranded above an empty field.
+   * Matches .rf-cardcell-label at rest, and goes on focus rather than on the
+   * first keystroke, which is the behaviour asked for.
+   */
+  /* Colour only — it inherits the field's own type above, so it cannot land in
+     a different size or place from the digits that replace it. opacity is for
+     Firefox, which dims placeholders. */
+  '#secure-payment-field::placeholder': { color: '#637381', opacity: '1' },
+  /* Hidden on click, back on blur if nothing was typed. The blur half is the
+     browser's own doing: an empty input shows its placeholder again. */
+  '#secure-payment-field:focus::placeholder': { color: 'transparent' },
   /*
    * field.html zeroes its own margins but never sets a HEIGHT — html, body and
    * the wrapper are all `flex: 1 1 auto` with no height, so a `height: 100%`
@@ -218,8 +266,14 @@ export async function mountHostedCard(
     gp.configure({ publicApiKey: key });
     const form = gp.ui.form({
       fields: {
-        'card-number': { target: opts.numberTarget, placeholder: ' ' },
-        'card-expiration': { target: opts.expiryTarget, placeholder: ' ' },
+        /* REAL text, because the frame is the only thing that can do this
+           correctly. A placeholder shows while its input is empty and returns
+           the moment it is emptied — the browser inside the frame knows that;
+           the parent cannot, because GP publishes no emptiness, length or
+           focus. Every parent-drawn version of this label got stuck on one
+           edge or another. */
+        'card-number': { target: opts.numberTarget, placeholder: 'Card Number' },
+        'card-expiration': { target: opts.expiryTarget, placeholder: 'MM / YYYY' },
         // GP will only tokenize from a gesture inside its own frame — the
         // form object exposes no programmatic equivalent — so this button
         // has to exist even though ours is the one the shopper sees.

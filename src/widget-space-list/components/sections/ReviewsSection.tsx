@@ -252,7 +252,7 @@ export function ReviewsSection() {
           <div
             className="sl-rv2-track"
             style={{
-              transform: `translateX(calc(${(carousel.offsetPct / 100).toFixed(6)} * 100%))`,
+              transform: `translateX(calc(${(carousel.offsetPct / 100).toFixed(6)} * (100% + 10px)))`,
               transition:
                 reduceMotion || carousel.dragging
                   ? 'none'

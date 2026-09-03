@@ -43,7 +43,15 @@
 /* 60px is the frame's gap between the trail and the "Self Storage Blogs" hero
    (9340:23373). This widget starts at the filter bar rather than the hero, so
    the gap lands above that instead — same distance, next element along. */
-.bpg-crumbs { margin-bottom: 60px; }
+/* 24px. This started at 60px, taken from a frame (9340:23373) where the gap sat
+   above a HERO — but this widget starts at the filter bar, and that distance
+   above a control row reads as a hole rather than breathing room. #16's
+   .bpp-crumbs uses 40px, which is the sibling blog page's value and was the
+   first step down; 24px is what the trail actually needs to sit WITH the bar it
+   introduces rather than float above it.
+   .bpg-wrapper is a plain block with no gap of its own, so this margin is the
+   whole distance — nothing else contributes to it. */
+.bpg-crumbs { margin-bottom: 24px; }
 
 /* DESKTOP ONLY. There is no mobile frame for this trail and none is wanted, so
    it is hidden rather than shrunk — unlike #16's, which has a designed mobile
@@ -58,6 +66,50 @@
 .bpg-wrapper *::before,
 .bpg-wrapper *::after {
   box-sizing: border-box;
+}
+
+/* ── Page head ─────────────────────────────────────────────────────────────
+   Breadcrumb, then h1, then the intro paragraph, then the bar. This heading was
+   an 80px "Self Storage Blogs" Duda SECTION above the widget; it is the widget's
+   own now, which is also what puts the breadcrumb genuinely above it rather than
+   under it — the mismatch the scope note in BlogsPage.tsx used to warn about. */
+.bpg-head {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.bpg-title {
+  margin: 0;
+  /* The frame is 80px on a 1347px canvas, and this widget can sit in a much
+     narrower Duda column where 80px is unreadable. Same clamp as #16's
+     .bpp-title, which came from the same 80px origin — one scale across both
+     blog pages, and no breakpoint per size. */
+  font-size: clamp(32px, 4.2vw, 80px);
+  font-weight: 600;
+  line-height: 1.25;
+  color: #101318;
+  /* Keeps a two-line heading from breaking one word onto the second line. */
+  text-wrap: balance;
+}
+
+.bpg-intro {
+  /* Not full-bleed: a centred paragraph running the widget's full 1330px is
+     hard to track back to the next line. 760px is roughly 90 characters at
+     this size, the upper end of comfortable measure. */
+  max-width: 760px;
+  margin: 16px auto 0;
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1.6;
+  color: #101318;
+  text-wrap: pretty;
+}
+
+@media (max-width: 900px) {
+  /* The breadcrumb is display:none here, so the heading is the first thing on
+     the page and needs no gap above it. */
+  .bpg-head { margin-bottom: 32px; }
+  .bpg-intro { font-size: 16px; margin-top: 12px; }
 }
 
 /* ── Filter / search bar ───────────────────────────────────────────────────── */
@@ -823,17 +875,14 @@
     min-width: 0;
   }
 
+  /* Wider only. The fill used to be hardcoded dark here, so at this width the
+     button always looked as though a filter was applied and disagreed with the
+     same control on desktop — and `.active` was only a slightly lighter dark,
+     so there was no selected state to read at all. Colour is the base rule's
+     now: white at rest, dark once .active is on. */
   .bpg-filter-btn {
     width: 64px;
     height: 44px;
-    background: #101318;
-    color: #fff;
-  }
-
-  .bpg-filter-btn:hover,
-  .bpg-filter-btn.active {
-    background: #22262d;
-    color: #fff;
   }
 
   .bpg-filter-badge {

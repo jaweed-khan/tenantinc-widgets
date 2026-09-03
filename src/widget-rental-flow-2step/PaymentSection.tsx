@@ -18,7 +18,7 @@
 // ===========================================================================
 
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { FormField, CheckIcon } from '@shared/ui';
+import { FormField, CheckIcon, AlertIcon } from '@shared/ui';
 import { Shimmer } from '@shared/Shimmer';
 import { AddressAutocomplete } from '@shared/AddressAutocomplete';
 import { BankIcon, CreditCardIcon, CheckTick, InfoIcon } from './icons';
@@ -296,44 +296,55 @@ export function CardForm({ total, onPay, busy, gpPublicKey, payLabel }: {
   const numId = `gp-num-${uid}`, expId = `gp-exp-${uid}`, subId = `gp-sub-${uid}`;
 
   /**
-   * Whether each hosted cell's label should float.
+   * What GP tells us about its two frames, and all it tells us: a `valid`
+   * boolean per keystroke. No length, no emptiness, no focus.
    *
-   * It used to be pinned for the whole of hosted mode, so both frames sat there
-   * looking permanently focused beside a resting CVV. It cannot be left to CSS
-   * either: the value is in GP's frame, where `:placeholder-shown` cannot see
-   * it, and a label that dropped back over live digits is worse than one stuck
-   * up. So the two halves of "float it" are tracked by hand.
-   *
-   * FOCUS. A cross-origin frame tells us nothing about its contents, but when
-   * it takes focus the PARENT window blurs and `document.activeElement` becomes
-   * the <iframe> element — enough to say which of the two has the caret.
-   *
-   * CONTENT. GP posts card-number-test / card-expiration-test on every input,
-   * so `valid` standing true is our only sight of a filled field.
+   * There is no label state here any more. A hosted cell's label is the
+   * frame's own placeholder now (see FIELD_STYLES in gpHostedFields), which is
+   * the only thing that can see whether the field is empty. The window
+   * blur/focus tracking that used to place a label from out here went with it:
+   * inferring "is it empty" from focus and validity was wrong in one direction
+   * or the other every way it was tried, and a focus whose end never reported
+   * left the label stuck.
    */
-  const [gpFocus, setGpFocus] = useState({ number: false, expiry: false });
-  const [gpFilled, setGpFilled] = useState({ number: false, expiry: false });
+  /** Live: does it hold a valid value RIGHT NOW. Gates the row's valid state. */
+  const [gpValid, setGpValid] = useState({ number: false, expiry: false });
+  /**
+   * Has each cell been LEFT. A message only appears once the shopper has moved
+   * on from a cell, never while they are still filling it in.
+   *
+   * The two plain cells report this themselves with onBlur. The two frames
+   * cannot — GP publishes no focus or blur — so the parent watches
+   * document.activeElement instead: focus inside a cross-origin iframe makes
+   * the <iframe> ELEMENT the active one, which is enough to say which cell has
+   * the caret without seeing anything in it.
+   *
+   * Polled rather than driven by window blur/focus, which misses a move
+   * straight from one frame to the other (the window is already blurred, so no
+   * second event fires). This only ever sets a one-way flag, so the worst a
+   * missed tick can do is show a message a fraction late.
+   */
+  const [touched, setTouched] = useState({ number: false, expiry: false, cvv: false });
+  const markTouched = (k: 'number' | 'expiry' | 'cvv') =>
+    setTouched((t) => (t[k] ? t : { ...t, [k]: true }));
   useEffect(() => {
     if (!hosted) return undefined;
-    const onWindowBlur = () => {
+    let prev: 'number' | 'expiry' | null = null;
+    const focused = (): 'number' | 'expiry' | null => {
       const el = document.activeElement;
-      if (!el || el.tagName !== 'IFRAME') return;
-      setGpFocus({
-        number: !!document.getElementById(numId)?.contains(el),
-        expiry: !!document.getElementById(expId)?.contains(el),
-      });
+      if (!el || el.tagName !== 'IFRAME') return null;
+      if (document.getElementById(numId)?.contains(el)) return 'number';
+      if (document.getElementById(expId)?.contains(el)) return 'expiry';
+      return null;
     };
-    // The page itself has the caret again, so neither frame does.
-    const onWindowFocus = () => setGpFocus({ number: false, expiry: false });
-    window.addEventListener('blur', onWindowBlur);
-    window.addEventListener('focus', onWindowFocus);
-    return () => {
-      window.removeEventListener('blur', onWindowBlur);
-      window.removeEventListener('focus', onWindowFocus);
-    };
+    const id = window.setInterval(() => {
+      const now = focused();
+      const left = prev;
+      if (left && left !== now) setTouched((t) => (t[left] ? t : { ...t, [left]: true }));
+      prev = now;
+    }, 150);
+    return () => window.clearInterval(id);
   }, [hosted, numId, expId]);
-  const floatNumber = hosted && (gpFocus.number || gpFilled.number);
-  const floatExpiry = hosted && (gpFocus.expiry || gpFilled.expiry);
 
   /* The token handler is rebuilt on every keystroke in the billing fields, but
      the frames are mounted ONCE — remounting would wipe the card mid-entry. So
@@ -343,22 +354,112 @@ export function CardForm({ total, onPay, busy, gpPublicKey, payLabel }: {
   /* The row is one bordered box holding three inputs, so it turns green as a
      unit rather than per-input — there is only one border to turn. */
   const cardRowValid = hosted
-    ? validCvv(cvv)
+    /* All THREE, not the CVV alone. GP reports each frame's validity on every
+       keystroke, so the number and the expiry are knowable — reading only the
+       CVV turned the row green, and its tick on, beside an empty expiry. */
+    ? gpValid.number && gpValid.expiry && validCvv(cvv)
     : validCard(number) && validExpiry(expiry) && validCvv(cvv);
   // GP's frame reports its own expiry problems; ours would be judging a field
   // it cannot see.
   const expError = hosted ? '' : expiryError(expiry);
   const [payAttempted, setPayAttempted] = useState(false);
+
+  /* The row is one box with three inputs, so it cannot ring the offending cell
+     on its own — it says which one underneath instead. The banner above only
+     reports THAT something is wrong; this is the detail.
+     Shown as soon as a cell has content and does not validate, not only on
+     submit: four digits of a sixteen-digit number is already wrong, and
+     waiting for the pay button to say so wastes the trip. Empty cells stay
+     quiet until a pay attempt — nothing has been got wrong yet.
+     In hosted mode the contents are GP's, but its per-keystroke validity is
+     not — gpValid tracks it, so an empty or half-typed frame can be named here
+     too rather than only the CVV. */
+  const cardCellError = (() => {
+    /* TYPED INTO, THEN LEFT — or a pay attempt. Never while a cell still has
+       the caret: a sixteen-digit number is wrong for fifteen keystrokes out of
+       sixteen, and saying so on each of them is noise the shopper is already
+       fixing. And never for a cell merely passed through, which is why each
+       rule needs content as well as a blur. */
+    if (hosted) {
+      /* PAY ATTEMPT ONLY for the two frames, and it has to be.
+         "Typed into, then left" needs to tell an empty cell from a partly
+         filled one, and GP cannot: its *-test event is bound inside the frame
+         to focus, blur, input, keydown AND keyup (checked in gp-1.0.0), so it
+         arrives for a cell that was merely clicked through, carrying the same
+         `valid: false` an empty cell and a three-digit one both produce. That
+         is what put "Enter a complete card number" under an empty field.
+         Pressing Pay is the one signal that cannot lie, and it does reach here
+         now — GP's own submit frame takes the click, so onError marks the
+         attempt (see the handler below). The plain cells keep the blur rule:
+         :placeholder-shown lets us see whether they hold anything. */
+      if (payAttempted && !gpValid.number) return 'Enter a complete card number';
+      if (payAttempted && !gpValid.expiry) return 'Enter the expiry date as MM / YYYY';
+    } else {
+      const n = digits(number);
+      if ((payAttempted || (touched.number && n.length > 0)) && !validCard(number)) {
+        return n.length === 0 ? 'Enter your card number' : `Enter all ${CARD_DIGITS} digits of your card number`;
+      }
+      // A complete but unusable expiry is wrong the moment it is complete, so
+      // this one does not wait to be left.
+      if (expError) return expError;
+      if ((payAttempted || (touched.expiry && digits(expiry).length > 0)) && !validExpiry(expiry)) {
+        return 'Enter the expiry date as MM / YY';
+      }
+    }
+    const c = digits(cvv);
+    if ((payAttempted || (touched.cvv && c.length > 0)) && !validCvv(cvv)) {
+      return c.length === 0 ? 'Enter the security code' : `Enter all ${CVV_DIGITS} digits of the security code`;
+    }
+    return '';
+  })();
   /** A suggestion has been chosen, so the address parts below are real. */
   const [addressPicked, setAddressPicked] = useState(false);
-  const showBillingParts = addressPicked || payAttempted
+  /* The four parts complete an address, so they appear once there IS one —
+     picked from a suggestion, or typed without picking — and once anything is
+     already in them (a browser autofill, or a return to the panel).
+     NOT on a bare pay attempt. Pressing Pay with the search empty used to
+     unfold all four, which answers a question nobody asked: the address has
+     not been started, so there is nothing to complete. The search box carries
+     the error on its own instead. */
+  const showBillingParts = addressPicked || filled(address)
     || filled(city) || filled(stateCode) || filled(zip);
   const complete = cardRowValid && filled(name) && filled(address) && filled(city)
     && stateCode.trim().length === 2 && zip.trim().length >= 3;
 
+  /* ONE banner, whichever went wrong, shown under the "Credit / Debit" head
+     rather than down beside the pay button (Figma 12029-93132). A shopper who
+     reaches a dead button looks at the button, not two hundred pixels above
+     it — and the fields it is talking about are all below this line.
+     A processing failure outranks an incomplete form: gpError means the card
+     itself was refused or the tokeniser broke, which is the more specific
+     thing and not something filling in a field will fix. */
+  const payError = gpError
+    || (payAttempted && !complete
+      ? 'Complete Billing Information details before processing payment'
+      : '');
+
   /** "1234567812345678" → "1234 5678 1234 5678" as it's typed. */
+  const numberRef = useRef<HTMLInputElement>(null);
   const expiryRef = useRef<HTMLInputElement>(null);
   const cvvRef = useRef<HTMLInputElement>(null);
+
+  /* Backspace at the very start of a cell carries on into the one before it,
+     so the row deletes as continuously as it fills. Forward auto-advance
+     already existed (see onNumber/onExpiry); this is the other direction.
+     Only when the caret is collapsed at 0 — mid-field or with a selection,
+     backspace means what it always means. */
+  const backspaceInto = (prev: React.RefObject<HTMLInputElement>) =>
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key !== 'Backspace') return;
+      const el = e.currentTarget;
+      if (el.selectionStart !== 0 || el.selectionEnd !== 0) return;
+      const target = prev.current;
+      if (!target) return;
+      e.preventDefault();
+      target.focus();
+      const end = target.value.length;
+      target.setSelectionRange(end, end);
+    };
 
   /*
    * Auto-advance: filling a field hands focus to the next one, so the whole row
@@ -429,9 +530,42 @@ export function CardForm({ total, onPay, busy, gpPublicKey, payLabel }: {
       submitTarget: `#${subId}`,
       onReady: () => { if (!dead) setGpReady(true); },
       onToken: (t) => onTokenRef.current(t),
-      onError: (m) => { if (!dead) setGpError(m); },
+      onError: (m) => {
+        if (dead) return;
+        setGpError(m);
+        /* This IS the pay attempt, as far as the hosted row is concerned.
+           GP will only tokenize from a gesture inside its own frame, so its
+           invisible submit button takes the click and OUR handler — the one
+           that sets payAttempted — never runs. Without this the banner showed
+           GP's rejection while the row underneath stayed silent, because every
+           per-field message waits on payAttempted.
+           Safe to treat as an attempt: both paths that reach onError are
+           downstream of a submit (token-error, and a token-success that
+           carried no token). A library that never loads does not come through
+           here — it resolves to null and the plain inputs take over. */
+        setPayAttempted(true);
+      },
       onFieldValid: (field, valid) => {
-        if (!dead) setGpFilled((f) => (f[field] === valid ? f : { ...f, [field]: valid }));
+        /* STICKY ONCE VALID, and nothing weaker.
+           GP tells us neither length nor emptiness, so "has content" has to be
+           inferred. Two weaker readings both fail:
+             - `valid` alone drops the label back onto a half-typed number the
+               moment the frame blurs;
+             - the event's mere ARRIVAL sticks the label up over an empty
+               field, because GP posts the expiration test without any input.
+           `valid` having been true at least once cannot happen to an empty
+           frame, and does not un-happen when a digit is deleted — so the label
+           stays up over a value being edited and never strands itself above
+           nothing.
+           What this still does not catch: a frame typed into but never brought
+           to valid, then blurred. That drops. It needs a length GP does not
+           expose, and stranding the label over an empty field is the worse of
+           the two. */
+        if (dead) return;
+        /* Whether the frame validates, and nothing more. Its arrival proves
+           nothing about content: GP binds this to focus and blur as well as to
+           typing. */
+        setGpValid((v) => (v[field] === valid ? v : { ...v, [field]: valid }));
       },
     }).then((h) => {
       if (dead) { h?.dispose(); return; }
@@ -447,13 +581,19 @@ export function CardForm({ total, onPay, busy, gpPublicKey, payLabel }: {
 
   return (
     <>
+      {payError && (
+        <div className="rf-payerr" role="alert">
+          <AlertIcon size={24} className="rf-payerr-ico" />
+          <span>{payError}</span>
+        </div>
+      )}
       {/*
         One bordered box holding three inputs — the design's card row. Not a
         FormField: that models a single labelled input, and forcing three into it
         would mean fighting its internals. Same tokens, so it sits flush with the
         real form fields above and below it.
       */}
-      <div className={`rf-cardrow${cardRowValid ? ' rf-cardrow--valid' : ''}${expError ? ' rf-cardrow--error' : ''}${hosted && !gpReady ? ' rf-cardrow--loading' : ''}`}>
+      <div className={`rf-cardrow${cardRowValid ? ' rf-cardrow--valid' : ''}${cardCellError ? ' rf-cardrow--error' : ''}${hosted && !gpReady ? ' rf-cardrow--loading' : ''}`}>
         <CreditCardIcon size={24} className="rf-cardrow-ico" />
 
         {/*
@@ -472,15 +612,21 @@ export function CardForm({ total, onPay, busy, gpPublicKey, payLabel }: {
           {hosted === false && (
             <input
               className="rf-cardrow-input"
+              ref={numberRef}
               value={number}
               onChange={(e) => onNumber(e.target.value)}
+              onBlur={() => markTouched('number')}
               placeholder=" "
               inputMode="numeric"
               autoComplete="cc-number"
               aria-label="Card Number (required)"
             />
           )}
-          <label className={`rf-cardcell-label${floatNumber ? ' rf-cardcell-label--pinned' : ''}`}>Card Number<span className="rf-req">*</span></label>
+          {/* PLAIN cells only. A hosted cell's label is the frame's own
+              placeholder, which is the only one that comes back when the field
+              is emptied — a second label drawn from here would sit on top of
+              it and could not know when to leave. */}
+          {hosted === false && <label className="rf-cardcell-label">Card Number<span className="rf-req">*</span></label>}
         </span>
 
         {/* Expiry and CVV are wrapped together so they move to a second line as
@@ -496,14 +642,15 @@ export function CardForm({ total, onPay, busy, gpPublicKey, payLabel }: {
                 ref={expiryRef}
                 value={expiry}
                 onChange={(e) => onExpiry(e.target.value)}
+                onBlur={() => markTouched('expiry')}
+                onKeyDown={backspaceInto(numberRef)}
                 placeholder=" "
                 inputMode="numeric"
                 autoComplete="cc-exp"
                 aria-label="Card expiry, MM / YY (required)"
               />
             )}
-            {/* GP's frame renders MM / YYYY. */}
-            <label className={`rf-cardcell-label${floatExpiry ? ' rf-cardcell-label--pinned' : ''}`}>{hosted ? 'MM / YYYY' : 'MM / YY'}<span className="rf-req">*</span></label>
+            {hosted === false && <label className="rf-cardcell-label">MM / YY<span className="rf-req">*</span></label>}
           </span>
 
           <span className="rf-cardcell rf-cardcell--cvv">
@@ -512,6 +659,10 @@ export function CardForm({ total, onPay, busy, gpPublicKey, payLabel }: {
               ref={cvvRef}
               value={cvv}
               onChange={(e) => setCvv(e.target.value.replace(/\D/g, '').slice(0, CVV_DIGITS))}
+              onBlur={() => markTouched('cvv')}
+              /* In hosted mode the expiry lives in GP's frame, which cannot be
+                 focused from here, so the chain stops at the CVV. */
+              onKeyDown={hosted ? undefined : backspaceInto(expiryRef)}
               placeholder=" "
               inputMode="numeric"
               autoComplete="cc-csc"
@@ -532,9 +683,20 @@ export function CardForm({ total, onPay, busy, gpPublicKey, payLabel }: {
           aria-hidden="true"
         />
       </div>
-      {expError && <p className="rf-cardrow-msg" role="alert">{expError}</p>}
+      {/* Which of the row's three is wrong. Replaces the expiry-only message
+          that used to sit here — an incomplete card number or CVV said nothing
+          at all before, so the row went red with no reason given. */}
+      {cardCellError && <p className="rf-cardrow-msg" role="alert">{cardCellError}</p>}
 
-      <FormField label="Name on Card" required value={name} onChange={setName} autoComplete="cc-name" state={ok(filled(name))} />
+      {/* `error` rather than a bare red state: the kit treats a message as
+          what PUTS a field in the error state, so a red box always says why.
+          Only after a pay attempt — ringing a field the shopper has not
+          reached yet would be scolding them for not having got there. */}
+      <FormField
+        label="Name on Card" required value={name} onChange={setName} autoComplete="cc-name"
+        state={ok(filled(name))}
+        error={payAttempted && !filled(name) ? 'Enter the name on the card' : undefined}
+      />
 
       {/* type="search" for the magnifier — the kit's affordance for a lookup
           field, ready for address search to be wired to it. The bank form's
@@ -559,7 +721,11 @@ export function CardForm({ total, onPay, busy, gpPublicKey, payLabel }: {
           setAddressPicked(true);
         }}
       >
-        <FormField label="Billing Address" required type="search" value={address} onChange={setAddress} autoComplete="billing street-address" state={ok(filled(address))} />
+        <FormField
+          label="Billing Address" required type="search" value={address} onChange={setAddress}
+          autoComplete="billing street-address" state={ok(filled(address))}
+          error={payAttempted && !filled(address) ? 'Enter your billing address' : undefined}
+        />
       </AddressAutocomplete>
 
       {/* City, state, country and ZIP stay hidden until the address lookup
@@ -573,8 +739,16 @@ export function CardForm({ total, onPay, busy, gpPublicKey, payLabel }: {
       {showBillingParts && (
         <>
           <div className="rf-pay-grid">
-            <FormField label="Billing City" required value={city} onChange={setCity} autoComplete="billing address-level2" state={ok(filled(city))} />
-            <FormField label="Billing State" required value={stateCode} onChange={(v) => setStateCode(v.toUpperCase().slice(0, 2))} autoComplete="billing address-level1" state={ok(stateCode.trim().length === 2)} />
+            <FormField
+              label="Billing City" required value={city} onChange={setCity} autoComplete="billing address-level2"
+              state={ok(filled(city))}
+              error={payAttempted && !filled(city) ? 'Enter your billing city' : undefined}
+            />
+            <FormField
+              label="Billing State" required value={stateCode} onChange={(v) => setStateCode(v.toUpperCase().slice(0, 2))}
+              autoComplete="billing address-level1" state={ok(stateCode.trim().length === 2)}
+              error={payAttempted && stateCode.trim().length !== 2 ? 'Two-letter state code' : undefined}
+            />
           </div>
 
           <div className="rf-pay-grid">
@@ -583,15 +757,14 @@ export function CardForm({ total, onPay, busy, gpPublicKey, payLabel }: {
               options={['United States', 'Canada']}
               state={country ? 'success' : 'default'}
             />
-            <FormField label="Billing ZIP Code" required value={zip} onChange={setZip} autoComplete="postal-code" state={ok(zip.trim().length >= 3)} />
+            <FormField
+              label="Billing ZIP Code" required value={zip} onChange={setZip} autoComplete="postal-code"
+              state={ok(zip.trim().length >= 3)}
+              error={payAttempted && zip.trim().length < 3 ? 'Enter your billing ZIP code' : undefined}
+            />
           </div>
         </>
       )}
-
-      {payAttempted && !complete && (
-        <p className="rf-cardrow-msg" role="alert">Complete the card and billing details to pay.</p>
-      )}
-      {gpError && <p className="rf-cardrow-msg" role="alert">{gpError}</p>}
 
       {/*
         In hosted mode GP's own submit frame sits invisibly on top of this

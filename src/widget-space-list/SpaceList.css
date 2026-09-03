@@ -337,6 +337,27 @@
      push the column wider. Not guarded — no theme sets it. */
   overflow-wrap: break-word;
 }
+
+/* Stand-in for the title while the property name is in flight. 39px is the
+   desktop line box the real <h1> occupies — 30px of text on a 1.3 leading — so
+   the block Duda measures does not change when the heading arrives and nothing
+   below it jumps. Same shimmer as #18's, which holds the same line on mobile. */
+.sl-wrapper .sl-title-skeleton {
+  height: 39px;
+  max-width: 420px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #eef1f4 25%, #e3e8ec 37%, #eef1f4 63%);
+  background-size: 400% 100%;
+  animation: sl-title-shimmer 1.4s ease infinite;
+}
+@keyframes sl-title-shimmer {
+  from { background-position: 100% 50%; }
+  to   { background-position: 0 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sl-wrapper .sl-title-skeleton { animation: none; }
+}
+
 /* "Select a Space" is a mobile-only heading. On desktop .sl-heading collapses
    (display:contents) so only the page title shows — desktop is unchanged. */
 .sl-wrapper .sl-heading { display: contents; }
@@ -595,12 +616,22 @@
   line-height: 16px;
   color: #101318;
   font-weight: 700;
-  margin-top: 12px;
+  /* No margin-top. The badge is either the FIRST child of its panel or absent —
+     both callers render it as `{unit.promo && <PromoBadge/>}` ahead of the
+     price+CTA row, so there is never anything above it for a margin to separate
+     it from. The panel's own padding sets the space above, and the panel's gap
+     sets the space below; the 12px was adding to the padding and nothing else.
+     Margins do not collapse in a flex container, so all 12px of it showed.
+     .sl-lc-promo, the list layout's copy of this badge, never had one. */
 }
 .sl-wrapper .sl-promo-icon { display: flex; align-items: center; flex-shrink: 0; color: var(--color_1, #f45f30); }
 
+/* Wraps so the CTA note can take a full-width line of its own beneath the
+   price and the button — it is a direct child of this row now, not of the
+   button's column. */
 .sl-wrapper .sl-card-pricing {
   display: flex;
+  flex-wrap: wrap;
   gap: 16px;
   align-items: flex-start;
 }
@@ -670,10 +701,12 @@
 }
 .sl-wrapper .sl-cta-col {
   flex: 1;
-  /* max-content rather than 0 so the one-line CTA note reserves its width; with
-     min-width:0 the column collapsed under it and the card's overflow:hidden
-     clipped the text at narrow grid widths. */
-  min-width: max-content;
+  /* 0, NOT max-content. The note used to live in here and was one line, so
+     max-content stretched this column to the note's full length and pushed the
+     row past the card's padding — the button hung off the page. The note is a
+     sibling of this column now and gets the whole row, so nothing in here needs
+     to reserve width for it. */
+  min-width: 0;
   align-self: stretch;
   display: flex;
   flex-direction: column;
@@ -731,29 +764,35 @@
 .sl-wrapper .sl-waitlist-btn:hover {
   background: color-mix(in srgb, var(--color_2, #509e2f) 8%, #ffffff);
 }
-.sl-wrapper .sl-cta-group {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  width: 100%;
-}
 /* The note under the CTA — "Limited Availability" (sold out, copy configurable
    via limitedAvailabilityCopy) or "Only X left - Rent soon!" (scarcity). One rule
    for both: Figma 7112-47044 and 7112-47400 specify the same 12px/16px SemiBold
    #fb4c4c right-aligned treatment, and the two messages share a slot under the
    button, so they must be pixel-identical. Replaces the old per-layout
    .sl-urgency / .sl-lc-urgency / .sl-dv-urgency rules. */
+/* Spans the whole price+button row: `flex: 0 0 100%` makes it the only thing on
+   its line. It is no longer boxed in by the button.
+   `white-space: normal` because it no longer has to be one line — that was only
+   ever propping up `min-width: max-content` on the columns, which is exactly
+   what pushed the button out of the card. Given the full row it fits on one
+   line anyway at every width the cards use, and wraps rather than overflowing
+   if a configurable limitedAvailabilityCopy is long. */
 .sl-wrapper .sl-limited-label {
+  flex: 0 0 100%;
+  min-width: 0;
   font-size: 12px;
   line-height: 16px;
   color: #fb4c4c;
   font-weight: 600;
   text-align: right;
-  margin-top: 4px;
-  /* One line, always. "Only 125 left - Rent soon!" is ~160px at this size and was
-     wrapping in the narrow CTA columns; the columns below use min-width:max-content
-     so they widen to fit this instead of breaking it. */
-  white-space: nowrap;
+  /* The rows carry gap:16px, which now also separates the note's line from the
+     button's. -12px brings the pair back to the 4px the design has always had.
+     A negative margin rather than a row-gap override, because .sl-dv-price-button
+     was already a wrapping row and its 16px between the price and the button
+     when THEY wrap is not this note's business to change. */
+  margin-top: -12px;
+  white-space: normal;
+  overflow-wrap: break-word;
 }
 /* Figma 7112-47056: the price small print is BLACK 12px/16px, and it must wrap
    rather than run on — it used to be grey and, being nowrap-wide, got clipped by
@@ -958,6 +997,7 @@
 .sl-wrapper .sl-lc-promo-icon { display: flex; flex-shrink: 0; color: var(--color_1, #f45f30); }
 .sl-wrapper .sl-lc-price-button {
   display: flex;
+  flex-wrap: wrap;
   gap: 16px;
   align-items: flex-start;
   flex: 0 1 334px;
@@ -974,11 +1014,9 @@
 }
 .sl-wrapper .sl-lc-btn-col {
   flex: 0 1 140px;
-  /* max-content, not a fixed px floor: the note under the button must stay on one
-     line, and its length varies (vacancy digits, plus configurable
-     limitedAvailabilityCopy). The price column is flex:1 1 auto with min-width:0,
-     so it absorbs the difference. */
-  min-width: max-content;
+  /* See .sl-cta-col — the note no longer sits in this column, so this no longer
+     has to widen to fit it. */
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -1128,8 +1166,8 @@
 .sl-wrapper .sl-dv-price { flex: 1 1 auto; min-width: 0; }
 .sl-wrapper .sl-dv-btn-col {
   flex: 0 1 146px;
-  /* See .sl-lc-btn-col — sized to keep the CTA note on one line. */
-  min-width: max-content;
+  /* See .sl-cta-col — the note is a sibling of this column now. */
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -1180,6 +1218,8 @@
     font-size: 22px !important;
     text-align: center !important;
   }
+  /* 22px on a 1.3 leading, matching the mobile heading it stands in for. */
+  .sl-wrapper .sl-title-skeleton { height: 29px; margin: 0 auto; }
   .sl-wrapper .sl-filter-panel,
   .sl-wrapper .sl-additional-panel.ap-left,
   .sl-wrapper .sl-additional-panel.ap-right { width: 100% !important; }
@@ -1246,7 +1286,9 @@
   .sl-wrapper .sl-dv-see-fits { font-size: 13px; gap: 4px; }
   .sl-wrapper .sl-dv-actions { max-width: 312px; }
   .sl-wrapper .sl-dv-price-button { gap: 12px; }
-  .sl-wrapper .sl-dv-btn-col { flex: 0 1 120px; min-width: max-content; }
+  /* min-width:0 here too — this is the narrowest step, so it is where a
+     max-content floor pushed the button furthest past the card's padding. */
+  .sl-wrapper .sl-dv-btn-col { flex: 0 1 120px; min-width: 0; }
   /* 22px (vs Figma's 24) is the last few px the price row needs to stay on ONE
      row with the CTA here — the list card drops to 20px at its narrow step. */
   .sl-wrapper .sl-dv-price .sl-main-price { font-size: 22px; }
@@ -2322,14 +2364,6 @@
    NOTES SECTION  (.sl-notes-*)  — Figma 10199-55239
    =========================================================================== */
 /* Still used by the About section (the Notes section dropped its card wrapper). */
-.sl-wrapper .sl-notes-card {
-  background: #f9fafb;
-  border-radius: 12px;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
 .sl-wrapper .sl-notes-text {
   margin: 0;
   font-size: 16px;
@@ -2457,6 +2491,11 @@
   display: flex;
   align-items: stretch;
   will-change: transform;
+  /* Real space between cards (Josh Wright asked for >=10px, 2026-08-27 — set to exactly 10). It is a
+     flex gap, not padding or a narrower card: those leave the item butting the
+     clip edge, so the neighbour shows through the rounded corner's notch. The
+     transform's step includes it — see the inline style in the TSX. */
+  gap: 10px;
 }
 
 /* Exactly one window wide, so the pitch the transform steps by and the card
@@ -2469,6 +2508,10 @@
   display: flex;
 }
 
+/* The 12px gap Josh Wright asked for (2026-08-27), taken off the CARD rather
+   than the item — padding on the item makes the clip end 12px past the card and
+   the next one peeks through, and a margin on the track changes what
+   `flex: 0 0 100%` resolves against and the cards drift. */
 .sl-wrapper .sl-rv2-track-item > .sl-rv2-card {
   width: 100%;
 }
@@ -2638,6 +2681,11 @@
   display: flex;
   align-items: stretch;
   will-change: transform;
+  /* Real space between cards (Josh Wright asked for >=10px, 2026-08-27 — set to exactly 10). It is a
+     flex gap, not padding or a narrower card: those leave the item butting the
+     clip edge, so the neighbour shows through the rounded corner's notch. The
+     transform's step includes it — see the inline style in the TSX. */
+  gap: 10px;
 }
 
 /* Exactly one window wide, so the pitch the transform steps by and the card
@@ -2646,6 +2694,15 @@
   flex: 0 0 100%;
   min-width: 0;
 }
+
+/* The 12px gap Josh Wright asked for (2026-08-27), taken off the CARD rather
+   than the item — padding on the item makes the clip end 12px past the card and
+   the next one peeks through, and a margin on the track changes what
+   `flex: 0 0 100%` resolves against and the cards drift. */
+.sl-wrapper .sl-nb2-track-item > * {
+  width: 100%;
+}
+
 
 .sl-wrapper .sl-nb2-map-placeholder {
   height: 300px;
@@ -3471,7 +3528,15 @@
 
      Deliberately not solved by spacing the cards apart: the item must stay
      exactly one window wide or the pitch stops matching the distance the
-     transform steps by, and the cards drift 16px further out with every step. */
+     transform steps by, and the cards drift 16px further out with every step.
+
+     The clip is also pulled 12px SHORT of the item. The card is 12px narrower
+     than its item (that is the inter-card gap), so the item's trailing 12px is
+     empty — but the next card begins the instant that item ends, right on the
+     clip edge, and the rounded corner's notch let it show through. Ending the
+     clip on the CARD's edge instead puts the seam outside the visible area.
+     The item keeps its full width, so pitch still equals step and nothing
+     drifts. */
   border-radius: 16px;
 }
 
@@ -3479,15 +3544,38 @@
   display: flex;
   align-items: stretch;
   will-change: transform;
+  /* Real space between cards. The step the transform moves by must include it —
+     see the inline style in BlogSection.tsx. */
+  gap: 10px;
 }
 
 /* Exactly one window wide, so the pitch the transform steps by and the card
-   width are the SAME quantity. Anything that makes the item wider than the
-   window (padding, margins, a gap on the track) desyncs the two and the cards
-   drift further out of place with every step. */
+   width are the SAME quantity. Anything that makes the ITEM wider than the
+   window (padding on the item, margins, a gap on the track) desyncs the two and
+   the cards drift further out of place with every step — that bug shipped once
+   and moved card 2 by 16px, card 3 by 32px.
+
+   The gap between cards therefore has to come from INSIDE the item, where it is
+   already part of the step: the item stays 100% and the card is inset within it.
+   Josh Wright asked for at least 10px (2026-08-27). The trailing 12px is inside
+   the step, so the card is 12px narrower than the window and the next card
+   starts 12px clear of it — measured 12.0px between neighbours, drift 0.0. */
 .sl-wrapper .sl-blog2-track-item {
   flex: 0 0 100%;
   min-width: 0;
+  display: flex;
+}
+
+/* The 12px gap Josh Wright asked for (2026-08-27) lives on the TRACK, as a flex
+   gap, and the transform compensates for it in the JSX (step = 100% + 12px).
+
+   Everything else was tried and failed: padding on the item, or a narrower card,
+   both leave the item butting the clip edge so the neighbour shows through the
+   rounded corner's notch; a margin on the track changed what `flex: 0 0 100%`
+   resolved against and the cards drifted 12px per step. A real gap moves the
+   next card genuinely away from the edge. */
+.sl-wrapper .sl-blog2-track-item > .sl-blog2-card {
+  width: 100%;
 }
 
 /* White card */
@@ -3936,6 +4024,20 @@
 /* 2px to match the pills inside the filter modal (.sl-filter-modal .sl-pill),
    so the same control is not thinner outside the popup than in it. */
 .sl-wrapper .sl-top-bar-pill {
+  /* Centred EXPLICITLY, not left to the UA.
+     The .active variant below already declares inline-flex + align-items, so
+     an unticked pill was the only one relying on a <button>'s default
+     centring of its own text — and that default is only as reliable as the
+     host's own button rules. A theme line-height taller than the 14px text
+     inflates the line box inside a fixed 44px pill and the label rides up in
+     it, which is invisible here (the harness sets no line-height) and shows on
+     a live page.
+     line-height: 1 removes the other half of it: the label's box is then the
+     glyphs, and align-items has something predictable to centre. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
   height: 44px;
   padding: 0 21px;
   border-radius: 100px;

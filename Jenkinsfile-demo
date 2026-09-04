@@ -1,0 +1,65 @@
+@Library('shared-library') _
+podTemplates.dockerTemplateGenericPod {
+    node(POD_LABEL) {
+
+        env.AWS_S3_BUCKET = "dev-website.build.bucket"
+        env.AWS_REGION    = "us-east-1"
+
+        def (environment, repoName, region, gitCredentialsId, branchName) = [
+                "demo",
+                "mariposa-duda-widgets",
+                env.region,
+                env.github_creds,
+                "demo"
+        ]
+
+        def commit_hash = null
+
+        try {
+            stage('Clean previous builds') {
+                def buildNumber = env.BUILD_NUMBER as int
+                if (buildNumber > 1) milestone(buildNumber - 1)
+                milestone(buildNumber)
+            }
+            stage('SCM checkout') {
+                awsGetSecretValueCmd = "aws secretsmanager get-secret-value --region " + region + " --secret-id github-urls --query SecretString --output text | jq -r '.[\"" + repoName + "\"]'"
+                scmUrl = sh(returnStdout: true, script: awsGetSecretValueCmd).toString().trim()
+                scmCheckout.scmCheckoutAtBranch(scmUrl, branchName, gitCredentialsId)
+                commit_hash = sh(returnStdout: true, script: 'git rev-parse --short=7 HEAD').toString().trim()
+                slackSendMessages.slackSendJobTriggeredMessage('jenkins-builds-notifications', commit_hash, branchName)
+            }
+            stage('Build and publish to S3') {
+                // deploy:dev runs `gulp upload:dry && npm run build && gulp upload`
+                // with DEPLOY_TARGET=dev, which the gulpfile maps to the
+                // "duda-widgets" S3 folder.
+                withEnv([
+                    "AWS_ACCESS_KEY_ID=${env.AWSACCESSKEYID}",
+                    "AWS_SECRET_ACCESS_KEY=${env.AWSSECRETACCESSKEY}",
+                    "AWS_S3_BUCKET=${env.AWS_S3_BUCKET}",
+                    "AWS_REGION=${env.AWS_REGION}"
+                ]) {
+                    sh """
+                    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+                    [ -s "\$HOME/.nvm/nvm.sh" ] && . "\$HOME/.nvm/nvm.sh"
+                    [ -s "\$HOME/.nvm/bash_completion" ] && . "\$HOME/.nvm/bash_completion"
+                    nvm install 20
+                    nvm use 20
+                    node --version
+                    npm ci
+                    npm run deploy:demo
+                    """
+                }
+            }
+            stage("Slack build notification") {
+                slackSendMessages.slackSendBuildSuccessMessage(env.AWS_S3_BUCKET, repoName, commit_hash, 'jenkins-builds-notifications', branchName)
+            }
+        } catch (Exception e) {
+            stage("Slack Send Error") {
+                println(e)
+                slackSendMessages.slackSendFailureMessage('jenkins-builds-failures', e, branchName)
+                // Throwing an exception with graceful exit.
+                throw new Exception("Job failed due to one of the pipeline stages failing.")
+            }
+        }
+    }
+}

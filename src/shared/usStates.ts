@@ -30,12 +30,36 @@ const CODE_TO_NAME: Record<string, string> = {
   PR: 'Puerto Rico',
 };
 
+/**
+ * The same table as an ordered list, for populating a <select>. Sorted by
+ * NAME, which is what a picker shows — the object above is keyed by code, and
+ * Puerto Rico sits at its end rather than in alphabetical place.
+ */
+export interface UsState {
+  /** Two-letter code, e.g. "CA" — the form an address record stores. */
+  code: string;
+  /** Full name, e.g. "California" — the form a picker lists. */
+  name: string;
+}
+
+export const US_STATES: UsState[] = Object.entries(CODE_TO_NAME)
+  .map(([code, name]) => ({ code, name }))
+  .sort((a, b) => a.name.localeCompare(b.name));
+
 /** Built once — the reverse lookup, keyed on the normalised name. */
 const NAME_TO_CODE: Record<string, string> = Object.entries(CODE_TO_NAME)
   .reduce((acc, [code, name]) => {
     acc[stateKey(name)] = code;
     return acc;
   }, {} as Record<string, string>);
+
+/** Is this a state we know, in either form? Cheaper than a list scan. */
+export function isKnownState(v: string): boolean {
+  const t = v.trim();
+  if (!t) return false;
+  if (t.length === 2 && CODE_TO_NAME[t.toUpperCase()]) return true;
+  return Boolean(NAME_TO_CODE[stateKey(t)]);
+}
 
 /** "CA" → "California". Unknown or already-spelled-out input passes through. */
 export function stateNameFromCode(code: string): string {

@@ -49,6 +49,22 @@ const IMAGES_FIELD = 'images';
 const HERO_FIELD = 'heroimage';
 
 /**
+ * Column holding the gallery VIDEO, labelled "video" — a Duda video field.
+ *
+ * Its value is used AS STORED, not rewritten. What the column currently holds
+ * is malformed — Duda has concatenated its embed prefix with the page URL,
+ * leaving the real id stranded on the end:
+ *
+ *   https://www.youtube.com/embed/https://mariposa…/storage-units/YyAuFiIv-V4
+ *
+ * That 303s instead of playing. The collection is being corrected at source,
+ * so this deliberately does NOT try to repair it: a parser that rebuilt the
+ * URL would keep working once the data is fixed and hide the fact that it ever
+ * was not. The poster image is derived separately and degrades on its own.
+ */
+const VIDEO_FIELD = 'video';
+
+/**
  * Coerce whatever the column hands back into a list of URLs.
  *
  * The shape depends on how the collection was built and cannot be assumed:
@@ -110,20 +126,56 @@ export async function fetchPropertyImages(
   propertyId: string,
   opts: { collectionName?: string; slug?: string } = {},
 ): Promise<string[]> {
+  return (await fetchPropertyMedia(propertyId, opts)).images;
+}
+
+/** A property's gallery: photos, and any video that follows them. */
+export interface PropertyMedia {
+  images: string[];
+  /** Empty when the column is absent or blank — the common case. */
+  videos: string[];
+}
+
+/**
+ * Photos AND video for one property, in a single pass over the collection.
+ *
+ * One function rather than two so the row is matched once and the two lists
+ * cannot disagree about which property they belong to. `fetchPropertyImages`
+ * is kept as the photos-only view because #05, #07 and the rental rail want
+ * exactly that and should not have to know a video column exists.
+ *
+ * Matches on the `id` column, the same key `Properties` uses, so a dynamic page
+ * that already knows its property id needs nothing new bound. `slug` is accepted
+ * as a fallback for a collection keyed that way instead.
+ */
+export async function fetchPropertyMedia(
+  propertyId: string,
+  opts: { collectionName?: string; slug?: string } = {},
+): Promise<PropertyMedia> {
+  const empty: PropertyMedia = { images: [], videos: [] };
   const id = str(propertyId).trim();
   const slug = str(opts.slug).trim();
-  if (!id && !slug) return [];
+  if (!id && !slug) return empty;
 
   const rows = await readOnce(opts.collectionName ?? PROPERTY_IMAGES_COLLECTION);
-  if (!rows.length) return [];
+  if (!rows.length) return empty;
 
   const row = rows.find((r) => (id && str(r.id) === id))
     ?? (slug ? rows.find((r) => str(r.slug) === slug) : undefined);
-  if (!row) return [];
+  if (!row) return empty;
 
-  // Hero first — it is the lead photo, so it must be slide one. Any duplicate
-  // of it inside `images` is dropped by toImageList's de-dupe.
-  return toImageList([row[HERO_FIELD], ...toImageList(row[IMAGES_FIELD])]);
+  return {
+    // Hero first — it is the lead photo, so it must be slide one. Any duplicate
+    // of it inside `images` is dropped by toImageList's de-dupe.
+    images: toImageList([row[HERO_FIELD], ...toImageList(row[IMAGES_FIELD])]),
+    /*
+     * The same coercion as the photos: the column can hand back an array, a
+     * JSON string, a separated list or a single `{url}`-ish object depending on
+     * how the collection was built, and a video URL is no different from an
+     * image URL to that parser. Empty column ⇒ [] ⇒ nothing is appended.
+     */
+    videos: toImageList(row[VIDEO_FIELD]),
+  };
 }
 
 /**

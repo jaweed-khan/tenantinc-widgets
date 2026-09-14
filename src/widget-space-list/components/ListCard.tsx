@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import type { Unit, UnitSize, WidgetConfig } from '../types';
 import { PriceBlock, CtaButton, FeatureList, CheckIcon, JunkFeeDisclaimer, PromoTagIcon } from './Pricing';
-import defaultImg from '../assets/tenantinc-default.png';
 import { unitImageSrc, unitImageOnError } from './unitImage';
 
 const SIZE_LABEL: Record<UnitSize, string> = {
@@ -49,12 +48,15 @@ export function ListCard({ size, units, config }: { size: UnitSize; units: Unit[
       <div className="sl-lc-display">
         <div className="sl-lc-left">
           <div className="sl-lc-image-col">
-            <img
-              className="sl-lc-img"
-              src={unitImageSrc(selected, defaultImg)}
-              alt="Storage Unit"
-              onError={unitImageOnError(selected, defaultImg)}
-            />
+            {/* No artwork ⇒ no element — see unitImage.ts. */}
+            {unitImageSrc(selected) && (
+              <img
+                className="sl-lc-img"
+                src={unitImageSrc(selected)}
+                alt="Storage Unit"
+                onError={unitImageOnError(selected)}
+              />
+            )}
             <a href="#" className="sl-lc-see-fits">
               See what fits <PlayCircleIcon />
             </a>

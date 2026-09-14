@@ -28,6 +28,7 @@ const widgetEntries = {
   // numbers its own widgets and #15 was free there. Bundle name is the link
   // between them, not the number.
   'widget-space-list-heading':'./src/widget-space-list-heading/index.tsx',// #18
+  'widget-my-account':       './src/widget-my-account/index.tsx',        // #19
   'widget-rental-flow-2step':'./src/widget-rental-flow-2step/index.tsx',// #99 (TBD)
   // Living styleguide for @shared/ui — DEV HARNESS ONLY, never a Duda widget.
   // Deliberately unnumbered so it can't be mistaken for one.

@@ -2331,7 +2331,11 @@
   overflow: hidden;
   display: flex;
   align-items: flex-end;
-  background-color: #f26500;
+  /* The ground behind the tile's cover image, so it only shows while that
+     image loads or if it is missing. Themed rather than a literal orange: an
+     unthemed site still gets #f26500, but a rebranded one no longer flashes a
+     colour from nowhere in its own grid. */
+  background-color: var(--color_1, #f26500);
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;

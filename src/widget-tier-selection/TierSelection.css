@@ -1040,7 +1040,10 @@
   background: #f4f6f8;
   padding: 40px 36px 4px 40px;
 }
-.ts-modal-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px 40px; flex-wrap: wrap; }
+/* Room on the right for the close button, which is pinned rather than laid
+   out here — see .ts-modal-close. Without it a long heading or admin line
+   would run under the mark. */
+.ts-modal-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px 40px; flex-wrap: wrap; padding-right: 72px; }
 .ts-modal-heading-main { text-align: left; }
 .ts-modal-actions { display: flex; align-items: flex-start; justify-content: flex-end; gap: 20px; flex: 0 0 auto; }
 .ts-modal-meta { display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 8px; flex: 0 0 auto; }
@@ -1050,12 +1053,25 @@
 .ts-modal-admin { display: flex; align-items: center; justify-content: flex-end; gap: 8px; min-height: 40px; margin: 0; font-size: 20px; font-weight: 400; color: #101318; }
 .ts-modal-admin-info { color: #101318; flex: 0 0 auto; }
 .ts-modal-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 16px 32px 32px; background: #f4f6f8; }
-/* Keep a 48px touch target while drawing the 40px Figma circle inside it. The
-   button participates in the header layout so its center follows the optional
-   urgency/admin block whether either, both, or neither message is present. */
+/*
+ * PINNED to the header's top-right corner, not laid out in it.
+ *
+ * It used to sit in `.ts-modal-actions`, sharing a flex row with the optional
+ * urgency / admin-fee block so its centre followed them. But
+ * `.ts-modal-heading` is flex-wrap:wrap, so as soon as that block was long
+ * enough to wrap — the admin-fee line is a full sentence — the whole row
+ * broke and the mark dropped out of the corner to sit beside the text,
+ * halfway down the header. It only looked right on pages that set neither
+ * message, which is why the demo build appeared correct and this one did not.
+ *
+ * Absolute against `.ts-modal-header` (already position:relative), at the
+ * header's own 40/36 padding less the 4px optical nudge it always had. The
+ * mobile block below repositions it the same way, and always did.
+ */
 .ts-modal-close {
-  position: relative;
-  top: -4px;
+  position: absolute;
+  top: 36px;
+  right: 36px;
   /* 52px desktop, 32px in the 640px block below — the icon's own two Figma
      sizes. The SVG fills the box, so box and mark are one number in each. */
   width: 52px;

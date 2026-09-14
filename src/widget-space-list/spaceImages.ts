@@ -186,34 +186,80 @@ export function amenityFileToken(label?: string): string | undefined {
  */
 const PARKING_DEFAULT_STEM = 'Car_RV_Boat';
 
+/**
+ * The shared S3/CloudFront set, used when the site's own Media Manager has
+ * nothing for a band.
+ *
+ * Every site gets these without uploading anything, which is the point: the
+ * Duda library is per-site and mostly empty, so before this a card on a fresh
+ * site fell straight past the operator artwork to the bundled render.
+ *
+ * ONLY THE SIX BASE STEMS EXIST HERE. Probed 2026-09-09: XSmall, Small,
+ * Medium, Large, XLarge and Car_RV_Boat all return 200 as .png; every amenity
+ * variant (Small_Driveup, Covered_Car_RV, …) returns 403. So this tier
+ * contributes the band picture alone — asking it for an amenity file would be
+ * one guaranteed-failed request per card, every time.
+ *
+ * A miss answers 403, exactly as Duda's CDN does, so the card's existing
+ * walk-on-error needs no special case. CORS is open and the type is image/png.
+ */
+const S3_FALLBACK_BASE = 'https://dr2r4w0s7b8qm.cloudfront.net/duda-unit-images';
+
 export function mediaManagerImagesFor(
   size: UnitSize,
-  opts: { siteId?: string; baseUrl?: string; amenity?: string; type?: SpaceType } = {},
+  opts: {
+    siteId?: string;
+    baseUrl?: string;
+    amenity?: string;
+    type?: SpaceType;
+    /** Override the shared S3 set; '' disables that tier entirely. */
+    s3BaseUrl?: string;
+  } = {},
 ): string[] {
   const parking = opts.type === 'parking';
   // Storage is filed by band; parking has no band of its own and falls back to
   // the broadest vehicle picture instead.
   const stem = parking ? PARKING_DEFAULT_STEM : MEDIA_FILE_STEM[size];
+  // No stem means no picture to ask ANY host for — `other`, the bucket for a
+  // tier whose dimensions did not parse.
   if (!stem) return [];
+
+  const out: string[] = [];
 
   let root = (opts.baseUrl ?? '').trim().replace(/\/+$/, '');
   if (!root) {
     const id = (opts.siteId ?? '').trim();
     // 'dev-site' is the harness placeholder: a request against it can only
     // 403, so it is treated as no site at all.
-    if (!id || id === 'dev-site') return [];
-    root = `${DUDA_CDN}/${encodeURIComponent(id)}/dms3rep/multi`;
+    if (id && id !== 'dev-site') root = `${DUDA_CDN}/${encodeURIComponent(id)}/dms3rep/multi`;
   }
 
-  const token = amenityFileToken(opts.amenity);
+  if (root) {
+    const token = amenityFileToken(opts.amenity);
+    /*
+     * Parking's specific file is the amenity ALONE — Covered_Car_RV.png, not
+     * Car_RV_Boat_Covered_Car_RV.png. The names already say what the space is,
+     * so prefixing the default would describe it twice and match nothing that
+     * has been uploaded.
+     */
+    const names = token
+      ? [parking ? token : `${stem}_${token}`, stem]
+      : [stem];
+    out.push(...names.map((n) => `${root}/${n}.png`));
+  }
+
   /*
-   * Parking's specific file is the amenity ALONE — Covered_Car_RV.png, not
-   * Car_RV_Boat_Covered_Car_RV.png. The names already say what the space is,
-   * so prefixing the default would describe it twice and match nothing that
-   * has been uploaded.
+   * The shared set, LAST among the artwork: the site's own upload always wins,
+   * and this only answers when the operator has not provided that band.
+   *
+   * Reached with no site id at all — the Duda tier needs one, this does not —
+   * so the harness and a site whose Media Manager is empty both still get real
+   * artwork instead of dropping to the bundled render.
+   *
+   * Base stem only, because that is all that exists there (see the constant).
    */
-  const names = token
-    ? [parking ? token : `${stem}_${token}`, stem]
-    : [stem];
-  return names.map((n) => `${root}/${n}.png`);
+  const s3 = (opts.s3BaseUrl ?? S3_FALLBACK_BASE).trim().replace(/\/+$/, '');
+  if (s3) out.push(`${s3}/${stem}.png`);
+
+  return out;
 }

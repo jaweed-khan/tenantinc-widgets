@@ -40,7 +40,7 @@
   outline: 0;
   background: transparent;
   font-family: inherit;
-  font-size: 20px;
+  font-size: 18px;
   color: #101318;
 }
 .hs-input::placeholder { color: #9aa4b2; }
@@ -50,7 +50,7 @@
   position: relative;
   flex: 0 0 auto;
   color: #101318;
-  font-size: 20px;
+  font-size: 18px;
   white-space: nowrap;
   min-width: 187px;
 }
@@ -94,7 +94,7 @@
   background: #fff;
   color: #101318;
   font: inherit;
-  font-size: 20px;
+  font-size: 18px;
   text-align: left;
   cursor: pointer;
 }
@@ -158,7 +158,7 @@
   background: #fff;
   color: #101318;
   font: inherit;
-  font-size: 20px;
+  font-size: 18px;
   text-align: left;
   cursor: pointer;
 }
@@ -177,13 +177,13 @@
   background: #fff;
   color: #101318;
   font: inherit;
-  font-size: 20px;
+  font-size: 18px;
   text-align: left;
   cursor: pointer;
 }
 .hs-suggestion:hover, .hs-suggestion--active { background: #f1f4f6; }
 .hs-suggestion:focus-visible { outline: 3px solid color-mix(in srgb, var(--hs-accent) 40%, white); }
-.hs-history-head { padding: 6px 12px 8px; background: #f6f7f8; color: #637381; font-size: 20px; font-weight: 600; }
+.hs-history-head { padding: 6px 12px 8px; background: #f6f7f8; color: #637381; font-size: 18px; font-weight: 600; }
 
 /* ── Layout 2: promotional search card (latest Figma Locations Modal) ───── */
 .hs-card {

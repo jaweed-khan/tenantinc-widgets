@@ -1,0 +1,1667 @@
+/* ===========================================================================
+   Widget #19 — My Account. Figma:
+     8815-115354  Account Info (the default left panel)
+     9030-31458   Make a Payment (the other left panel)
+     8815-117093  one property card holding TWO units
+     8884-131918  Payment Activity, expanded
+     8815-115876  the Edit panel
+
+   Colours come from the kit's tokens wherever the kit has one, so a rebranded
+   site (which overrides --hb-cta / --hb-secondary on :root) carries this
+   screen with it. The five values the kit does NOT own are declared once at
+   the top of .ma-wrapper rather than sprinkled as literals:
+
+     --ma-panel     #f9fafb  Primary/Cloud/Lighter — page + inset panels
+     --ma-panel-bd  #c4cdd5  Primary/Cloud/Dark    — the autopay panel's rule
+     --ma-chip      #f4f6f8  the "Signed" pill
+     --ma-notify    #f26500  Primary/Notifications — three jobs: the past-due
+                             ring, the SELECTED card's ring, and "Pay Now".
+                             Deliberately not --hb-ada-red (which already means
+                             "error") and not --hb-cta (which means "go").
+     --ma-notify-bg #fffaf7  its tint
+
+   Note on greens: `--hb-cta` only. The Aug-2026 pass removed every literal
+   #509e2f, and this sheet must not put one back.
+   =========================================================================== */
+
+@import '../shared/ui/tokens.css';
+
+.ma-wrapper {
+  --ma-panel: #f9fafb;
+  --ma-panel-bd: #c4cdd5;
+  --ma-chip: #f4f6f8;
+  --ma-notify: #f26500;
+  --ma-notify-bg: #fffaf7;
+  /* Primary/Status/Guidance + Guidance-Light, the autopay-cancelled notice.
+     Named after the Figma variables. The shared kit has no status blue — it
+     only carries ADA green and red — so this is widget-scoped, not a token. */
+  --ma-guide: #3d8fff;
+  --ma-guide-bg: #e7f1ff;
+  --ma-shadow-sm: 0 4px 5px rgba(71, 84, 116, 0.1);
+  --ma-shadow-md: 0 4px 10px 3px rgba(71, 84, 116, 0.1);
+
+  /* The frame's buttons are 40px, not the kit's default 52. One token, scoped
+     to this widget, rather than a height override on each call site. */
+  --hb-button-height: 40px;
+
+  box-sizing: border-box;
+  width: 100%;
+  padding: 32px 24px 64px;
+  background: var(--ma-panel);
+  font-family: var(--hb-font);
+  color: var(--hb-text-night);
+  -webkit-font-smoothing: antialiased;
+}
+
+.ma-wrapper *,
+.ma-wrapper *::before,
+.ma-wrapper *::after { box-sizing: border-box; }
+
+.ma-wrapper p,
+.ma-wrapper h1,
+.ma-wrapper h2,
+.ma-wrapper ul { margin: 0; }
+.ma-wrapper ul { padding: 0; list-style: none; }
+
+.ma-sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0);
+  white-space: nowrap; border: 0;
+}
+
+/* ── Page grid ─────────────────────────────────────────────────────────────
+   866 main + 422 sidebar + 29 gutter = the 1317 the frame lays out inside
+   1920. minmax(0,…) on the main column so a long address cannot push the
+   sidebar off; the sidebar itself is fixed, as drawn. */
+.ma-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 866px) 422px;
+  column-gap: 29px;
+  row-gap: 28px;
+  align-items: start;
+  max-width: 1317px;
+  margin: 0 auto;
+}
+
+.ma-greeting {
+  grid-column: 1;
+  font-size: 36px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--hb-text-night);
+}
+
+.ma-logged-in {
+  grid-column: 2;
+  align-self: center;
+  text-align: right;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 22px;
+  color: var(--hb-text-night);
+  /* An address can be long; wrap rather than widen the column. */
+  overflow-wrap: anywhere;
+}
+
+.ma-main {
+  grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+
+.ma-side {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Kit buttons at the frame's 40px. The token above does the height; this only
+   tightens the horizontal padding to match the drawn boxes. */
+.ma-btn-40 { padding: 0 20px; }
+
+/* ── Promo card ────────────────────────────────────────────────────────────
+   Same box in both frames; only the copy swaps (autopay on the default view,
+   supplies on the payment view). The green ring is the one place a card is
+   outlined in CTA rather than the selection orange. */
+.ma-promo {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 26px;
+  min-height: 142px;
+  padding: 32px 48px;
+  background: #fff;
+  border: 2px solid var(--hb-cta);
+  border-radius: 12px;
+  box-shadow: var(--ma-shadow-sm);
+}
+
+.ma-promo__text {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ma-promo__title {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--hb-text-night);
+}
+
+.ma-promo__body {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--hb-grayscale-medium);
+}
+
+/* ── Make a Payment ────────────────────────────────────────────────────── */
+.ma-pay {
+  padding: 34px 48px 32px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: var(--ma-shadow-md);
+}
+
+/* Scoped under .ma-wrapper deliberately: the `.ma-wrapper h2 { margin: 0 }`
+   reset near the top of this file is a class PLUS a type selector, so it
+   outranks a bare `.ma-pay__title` and this gap silently never applied. */
+.ma-wrapper .ma-pay__title {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: #000;
+  margin-bottom: 42px;
+}
+
+/* Space header — the radio sits outdented, level with the card's text edge. */
+.ma-space-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px -14px;
+}
+
+.ma-radio {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px; height: 22px;
+  padding: 0;
+  background: #fff;
+  border: 2px solid var(--hb-cloud-darker);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: border-color var(--hb-transition);
+}
+.ma-radio:hover { border-color: var(--hb-text-night); }
+.ma-radio:focus-visible { outline: none; box-shadow: var(--hb-focus-ring); }
+.ma-radio--on { border-color: var(--hb-cta); }
+
+.ma-radio__dot {
+  width: 11px; height: 11px;
+  border-radius: 50%;
+  background: transparent;
+  transition: background var(--hb-transition);
+}
+.ma-radio--on .ma-radio__dot { background: var(--hb-cta); }
+
+.ma-space-head__label {
+  min-width: 0;
+  font-size: 20px;
+  line-height: 1.3;
+  color: #000;
+}
+.ma-space-head__num { font-weight: 700; }
+.ma-space-head__sep { font-weight: 400; }
+.ma-space-head__addr { font-size: 16px; font-weight: 400; }
+
+/* MOBILE ONLY (9038-78423). The desktop frame has no amount on this row —
+   the money lives in the breakdown, which is always open there. */
+.ma-space-head__amount { display: none; }
+
+/* ── Autopay panel ─────────────────────────────────────────────────────── */
+.ma-autopay {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  min-height: 109px;
+  padding: 15px 20px;
+  background: var(--ma-panel);
+  border: 2px solid var(--ma-panel-bd);
+  border-radius: 12px;
+}
+
+.ma-autopay__left { min-width: 0; }
+
+.ma-autopay__head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.ma-autopay__title {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 18px;
+  color: #333;
+}
+
+/* Aligned under the title, not the icon — 24px glyph + 14px gap. */
+.ma-autopay__detail {
+  margin: 12px 0 0 38px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--hb-grayscale-medium);
+}
+
+/* The frame's column is 233px, but its checkbox is a bare 34px container while
+   the kit's adds a box plus a gap — at 233 the label wrapped to two lines. A
+   few px wider keeps both rows on one line, which is what the frame shows. */
+.ma-autopay__actions {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 252px;
+}
+
+/* The kit checkbox at this row's type size. */
+.ma-autopay__check .hb-check__label {
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.2;
+  color: var(--hb-text-night);
+}
+
+/* An icon + underlined label that behaves like a link but is a real button. */
+.ma-link-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+}
+.ma-link-row--tight { gap: 6px; }
+.ma-link-row:focus-visible { outline: none; box-shadow: var(--hb-focus-ring); border-radius: 4px; }
+
+.ma-link {
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.2;
+  color: var(--hb-text-night);
+  text-decoration: underline;
+  text-underline-position: from-font;
+}
+.ma-link-row:hover .ma-link { text-decoration-thickness: 2px; }
+
+/* ── Money lines ───────────────────────────────────────────────────────── */
+.ma-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 724px;
+  max-width: 100%;
+  margin: 20px auto 0;
+}
+
+.ma-line {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.ma-line--total { margin-top: 8px; }
+
+.ma-line__label {
+  min-width: 0;
+  font-size: 16px;
+  line-height: 18px;
+  color: #000;
+}
+.ma-line__strong { font-weight: 600; color: #333; }
+.ma-line__note   { font-weight: 400; color: #333; }
+.ma-line__label--plain { font-weight: 400; }
+.ma-line__label--total {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--hb-text-night);
+}
+
+.ma-line__right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.ma-line__amount {
+  flex: none;
+  min-width: 81px;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 18px;
+  text-align: right;
+  color: #000;
+}
+.ma-line__amount--strong { font-weight: 600; color: #333; }
+.ma-line__amount--total {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--hb-text-night);
+}
+
+/* ── Balance due ───────────────────────────────────────────────────────── */
+.ma-balance {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 76px;
+  margin-top: 20px;
+  padding: 16px 20px;
+  background: var(--ma-notify-bg);
+  border: 2px solid var(--ma-notify);
+  border-radius: 8px;
+}
+
+.ma-balance__left { flex: none; width: 200px; }
+
+.ma-balance__heading {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.ma-balance__title {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--hb-text-night);
+}
+
+.ma-balance__info { flex: none; color: var(--hb-text-night); }
+
+.ma-balance__through {
+  margin-top: 4px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 18px;
+  color: var(--hb-grayscale-medium);
+}
+
+.ma-balance__check .hb-check__label {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--hb-grayscale-medium);
+}
+
+.ma-balance__right { margin-left: auto; text-align: right; }
+
+.ma-balance__amount {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--hb-text-night);
+}
+
+.ma-balance__past {
+  margin-top: 2px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--hb-ada-red);
+}
+
+/* ── Payment methods ───────────────────────────────────────────────────── */
+.ma-methods {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-top: 20px;
+}
+
+.ma-method {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 64px;
+  padding: 8px 16px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  transition: background var(--hb-transition), border-color var(--hb-transition);
+}
+.ma-method:focus-visible { outline: none; box-shadow: var(--hb-focus-ring); }
+
+.ma-method--dark {
+  background: var(--hb-text-night);
+  border: 2px solid var(--hb-text-night);
+  color: #fff;
+}
+.ma-method--dark:hover { background: color-mix(in srgb, var(--hb-text-night) 82%, #fff); }
+
+.ma-method--outline {
+  background: #fff;
+  border: 2px solid var(--hb-text-night);
+  color: #000;
+}
+.ma-method--outline:hover { background: var(--ma-panel); }
+
+/* Apple's lockup is currentColor, so the dark tile's white carries it. */
+.ma-applepay {
+  display: inline-flex;
+  color: #fff;
+}
+.ma-applepay svg { width: 62px; height: 26.3px; }
+
+/* Google's two leaves overlap exactly as the frame stacks them: the mark at
+   the origin, the typeface 33.1px right and 1.59px down. */
+.ma-gpay {
+  position: relative;
+  display: block;
+  width: 76.977px;   /* 33.1 + 43.877 */
+  height: 30px;      /* 1.59 + 28.406 */
+}
+.ma-gpay__mark { position: absolute; left: 0; top: 0; }
+.ma-gpay__type { position: absolute; left: 33.1px; top: 1.59px; }
+
+/* ── Payment Activity ──────────────────────────────────────────────────── */
+.ma-activity {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: var(--ma-shadow-sm);
+  overflow: hidden;
+}
+
+.ma-activity__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 82px;
+  padding: 23px 40px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+.ma-activity__bar:focus-visible { outline: none; box-shadow: inset var(--hb-focus-ring); }
+
+.ma-activity__title {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--hb-text-night);
+}
+
+/* The asset points right; a quarter turn puts it where the frame has it. */
+.ma-activity__chev {
+  display: inline-flex;
+  transform: rotate(90deg);
+  transition: transform var(--hb-transition);
+}
+.ma-activity__chev--open { transform: rotate(-90deg); }
+
+.ma-activity__body { padding: 0 40px 28px; }
+
+.ma-activity__empty {
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--hb-grayscale-medium);
+}
+
+/* ── Sidebar: property card ────────────────────────────────────────────── */
+.ma-prop {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: var(--ma-shadow-md);
+  overflow: hidden;
+}
+
+.ma-prop__hero {
+  position: relative;
+  height: 216px;
+}
+
+.ma-prop__photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* The frame stacks three 50%-black fills over the photo; the export reads as
+   a light wash that deepens behind the text. A gradient reproduces that and
+   keeps the address legible over any photo that replaces this one. */
+.ma-prop__scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.15) 0%, rgba(0, 0, 0, 0.68) 100%);
+}
+
+.ma-prop__heroText {
+  position: absolute;
+  left: 25px;
+  right: 25px;
+  bottom: 17px;
+  color: #fff;
+}
+
+.ma-prop__name {
+  margin-bottom: 6px;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ma-prop__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: #fff;
+  text-decoration: underline;
+  text-underline-position: from-font;
+}
+.ma-prop__row:hover { text-decoration-thickness: 2px; }
+.ma-prop__row:focus-visible { outline: 2px solid #fff; outline-offset: 2px; border-radius: 2px; }
+.ma-prop__icon { flex: none; }
+
+/* ── Sidebar: the unit ─────────────────────────────────────────────────────
+   `.ma-unit` is the selection target: the frame rings this block, not the
+   whole card (8815:115553 — 4px, bottom corners rounded, sitting over the unit
+   from y=216 down). An INSET shadow rather than a border, so selecting a card
+   cannot reflow it by 4px; the parent's overflow clips it to the rounded
+   bottom, which is exactly how the frame draws it. */
+.ma-unit { position: relative; }
+
+/* An OVERLAY, not an inset shadow. An inset box-shadow paints in the
+   element's own background layer — beneath every child — so the balance strip,
+   which is opaque and full-width, painted straight over the bottom run of the
+   ring and it stopped at the panel. This sits above everything instead.
+
+   The ring is per-UNIT, not per-card: with two units stacked, only the
+   selected one is ringed. */
+.ma-unit--selected::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border: 4px solid var(--ma-notify);
+  pointer-events: none;
+}
+
+/* Only the last unit reaches the card's rounded bottom; a ringed unit with
+   another beneath it is square, so the two blocks meet flush. */
+.ma-unit:last-child.ma-unit--selected::after {
+  border-radius: 0 0 12px 12px;
+}
+
+/* Separates stacked units — the frame butts one block's balance strip against
+   the next block's white panel, and without a rule they read as one block. */
+.ma-unit + .ma-unit { border-top: 1px solid rgba(16, 19, 24, 0.10); }
+
+.ma-unit__panel {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 30px;
+}
+
+/* Fills the PANEL — not the whole unit — so the balance strip below keeps its
+   own hit area and "Account Info" stays clickable.
+
+   `appearance: none` is the point of this block: a <button> keeps its native
+   chrome in some engines even with `background: none`, so the UA's buttonface
+   grey painted over the panel on hover and swallowed the content. Every
+   inherited button style is reset explicitly. */
+.ma-unit__select {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background-color: transparent;
+  background-image: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.ma-unit__select:hover,
+.ma-unit__select:active {
+  background-color: transparent;
+}
+.ma-unit__select:focus-visible {
+  outline: 3px solid var(--hb-text-night);
+  outline-offset: -3px;
+}
+
+.ma-unit__info { min-width: 0; }
+
+.ma-unit__num {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--hb-text-night);
+}
+
+.ma-unit__size {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 20px;
+  color: var(--hb-text-night);
+}
+
+.ma-unit__features {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 16px;
+}
+
+.ma-unit__features li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 16px;
+  color: var(--hb-grayscale-medium);
+}
+
+/* Both dimensions explicit — the frame draws it at 161.8 x 119. */
+.ma-unit__image {
+  flex: none;
+  width: 161.8px;
+  height: 119px;
+  object-fit: contain;
+}
+
+/* Above the select overlay so the "Account Info" button stays clickable.
+   16px vertical lands the frame's 64px strip when there is no button, and
+   grows to its ~76px when there is. */
+.ma-unit__footer {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 30px;
+  background: var(--ma-panel);
+}
+
+.ma-unit__due { flex: none; }
+
+.ma-unit__dueLabel {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 16px;
+  color: var(--hb-text-night);
+}
+
+.ma-unit__dueDate {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  color: var(--hb-text-night);
+}
+
+.ma-unit__dueAmount {
+  margin-left: auto;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: right;
+  color: var(--hb-text-night);
+}
+
+.ma-add { width: 100%; }
+
+/* ── Account Info panel (8815-115354) ──────────────────────────────────────
+   The card has NO padding of its own: the body pads itself and the action
+   panel pads itself, so the tinted panel can run edge to edge and finish the
+   card's rounded bottom. */
+.ma-account {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: var(--ma-shadow-sm);
+  overflow: hidden;
+}
+
+.ma-account__body { padding: 32px 48px; }
+
+.ma-account__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.ma-account__title {
+  font-size: 36px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--hb-text-night);
+}
+
+.ma-account__rule {
+  height: 0;
+  margin: 24px 0 27px;
+  border: 0;
+  border-top: 1px solid rgba(16, 19, 24, 0.12);
+}
+
+.ma-account__cols {
+  display: flex;
+  align-items: flex-start;
+  gap: 61px;
+}
+
+.ma-account__col--contact { flex: none; width: 367px; }
+.ma-account__col--docs { flex: 1 1 0; min-width: 0; }
+
+.ma-account__alt {
+  width: 367px;
+  max-width: 100%;
+  margin-top: 29px;
+}
+
+.ma-account__label {
+  margin: 0 0 16px;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 16px;
+  color: var(--hb-text-night);
+}
+
+/* ── Icon + text rows, shared by both contact blocks and the action links ── */
+.ma-info__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ma-info__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+}
+
+/* Both dimensions fixed so a wrapping two-line address does not stretch the
+   glyph, and top-aligned against it. */
+.ma-info__icon {
+  flex: none;
+  display: block;
+  width: 24px;
+  height: 24px;
+  align-self: flex-start;
+  margin-top: 3px;
+}
+
+.ma-info__text {
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--hb-text-night);
+  overflow-wrap: anywhere;
+}
+
+/* The address arrives as separate lines and keeps them. */
+.ma-info__line { display: block; }
+
+/* ── Documents ─────────────────────────────────────────────────────────── */
+.ma-docs__row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 30px;
+}
+
+/* A real <a> once the documents API is wired; a button today, so it reads and
+   focuses like a control without a dead href. */
+.ma-docs__link {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--hb-text-night);
+  text-decoration: underline;
+  text-underline-position: from-font;
+}
+.ma-docs__link:hover { text-decoration-thickness: 2px; }
+.ma-docs__link:focus-visible { outline: none; box-shadow: var(--hb-focus-ring); border-radius: 4px; }
+
+.ma-docs__chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 69px;
+  height: 28px;
+  padding: 0 19px;
+  background: var(--ma-chip);
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: #000;
+}
+
+/* ── Action panel ──────────────────────────────────────────────────────── */
+.ma-action {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 32px 48px;
+  background: var(--ma-panel);
+}
+
+.ma-action__due {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.ma-action__dueLabel {
+  min-width: 0;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--hb-text-night);
+}
+
+.ma-action__pay {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.ma-action__amount {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: right;
+  color: var(--hb-text-night);
+}
+
+/* Not a kit tone: Primary/Notifications is neither "go" (cta) nor "error"
+   (ada-red), and adding a fourth tone to the kit for one button in one widget
+   would put a colour in the shared layer that nothing else uses. */
+.ma-paynow {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 96px;
+  height: 40px;
+  padding: 0 8px;
+  background: var(--ma-notify);
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 16px;
+  color: #fff;
+  transition: background var(--hb-transition);
+}
+.ma-paynow:hover { background: color-mix(in srgb, var(--ma-notify) 88%, #000); }
+.ma-paynow:active { background: color-mix(in srgb, var(--ma-notify) 78%, #000); }
+.ma-paynow:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ma-notify) 35%, transparent);
+}
+
+.ma-action__links { gap: 8px; }
+
+/* ── Payment Activity table (8884-131918) ──────────────────────────────────
+   Column widths come from the frame's ROW cell positions (0/162/303/412/563/
+   701 inside 783), not its header positions, which sit up to 11px off. Header
+   and body share the grid so they cannot drift apart with real data. */
+.ma-act__scroll {
+  /* The six columns do not compress below ~720px; scroll the table rather than
+     let the page scroll sideways. */
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ma-act {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  text-align: left;
+}
+
+.ma-act th,
+.ma-act td {
+  padding: 0;
+  vertical-align: top;
+}
+
+/* The frame's proportions: 162 / 141 / 109 / 151 / 138 / 82 of 783. */
+.ma-act th:nth-child(1), .ma-act td:nth-child(1) { width: 20.7%; }
+.ma-act th:nth-child(2), .ma-act td:nth-child(2) { width: 18.0%; }
+.ma-act th:nth-child(3), .ma-act td:nth-child(3) { width: 13.9%; }
+.ma-act th:nth-child(4), .ma-act td:nth-child(4) { width: 19.3%; }
+.ma-act th:nth-child(5), .ma-act td:nth-child(5) { width: 17.6%; }
+.ma-act th:nth-child(6), .ma-act td:nth-child(6) { width: 10.5%; }
+
+/* The tinted, rounded header bar. Radius goes on the cells because a <tr>
+   cannot carry one with border-collapse. */
+.ma-act__head th {
+  height: 42px;
+  padding: 0 0 0 15px;
+  background: var(--ma-panel);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.2;
+  color: var(--hb-grayscale-medium);
+  white-space: nowrap;
+}
+.ma-act__head th:first-child { border-radius: 12px 0 0 12px; }
+.ma-act__head th:last-child { border-radius: 0 12px 12px 0; }
+
+/* 25px between rows in the frame, split either side of the rule. */
+.ma-act tbody td {
+  padding: 25px 12px 25px 15px;
+  border-bottom: 1px solid rgba(16, 19, 24, 0.10);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.2;
+  color: var(--hb-text-night);
+}
+.ma-act tbody tr:last-child td { border-bottom: 0; }
+
+/* Amount is the only bold column. Qualified with `td` deliberately: the cell
+   rule above is `.ma-act tbody td` (0,1,2), which outranks a bare class. */
+.ma-act tbody td.ma-act__amount { font-weight: 700; }
+
+/* A payment covering two spaces stacks them, as the frame's first row does. */
+.ma-act__line { display: block; }
+.ma-act__line + .ma-act__line { margin-top: 5px; }
+
+.ma-act__invoice {
+  display: block;
+  padding: 0;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.2;
+  color: var(--hb-text-night);
+  text-decoration: underline;
+  text-underline-position: from-font;
+}
+.ma-act__invoice + .ma-act__invoice { margin-top: 5px; }
+.ma-act__invoice:hover { text-decoration-thickness: 2px; }
+.ma-act__invoice:focus-visible { outline: none; box-shadow: var(--hb-focus-ring); border-radius: 4px; }
+
+/* ── The card / bank forms ─────────────────────────────────────────────────
+   The forms themselves are #99's, styled by its own .rf- stylesheet. Only the
+   two things this panel owns are set here: which tile is open, and the gap
+   above the panel that appears beneath them. */
+
+/* The open method, marked in the SAME colour as the panel it opens — #99
+   draws that panel with a 2px --hb-cta border, and a tile in this widget's
+   orange above a CTA-coloured panel reads as two objects rather than one. */
+.ma-method--on {
+  border-color: var(--hb-cta);
+  color: var(--hb-cta);
+}
+
+.ma-payform { margin-top: 20px; }
+
+/* THE CARD ROW, SIZED BY THIS PANEL RATHER THAN THE WINDOW.
+   #99 decides this row's shape from VIEWPORT media queries written for step
+   2's column: wrap above 640px, and below it force one line with smaller
+   cells. Neither fits here, because this panel is narrower than that column
+   at any given window width — nesting it inside the payment card costs it
+   about 50px. So the row was wrapping when the window looked wide, and then,
+   once that was forced to one line, the number cell shrank below the width of
+   its own label and the three absolutely-positioned labels printed on top of
+   each other.
+
+   Both come from the same mistake: letting a WINDOW measurement decide a
+   layout the CONTAINER constrains. So neither is used. The number keeps a
+   floor wide enough for "Card Number *", and wrapping is the valve for when
+   even that will not fit — which is a deliberate two-line layout, not the
+   collision. The floor is 150 rather than #99's 180 because the label is
+   14px here, so it needs less room, and the lower floor is what keeps the row
+   on one line at the widths this panel actually gets. */
+.ma-payform .rf-cardrow { flex-wrap: wrap; }
+.ma-payform .rf-cardcell--number { min-width: 150px; }
+
+/* ── Edit panel (9038-81963) ───────────────────────────────────────────────
+   Same card shell as the Account Info panel: no padding of its own, so the
+   tinted action bar can run edge to edge and finish the rounded bottom.
+   Every field inside is the kit's <FormField>; nothing here restyles one. */
+.ma-edit {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: var(--ma-shadow-sm);
+  overflow: hidden;
+}
+
+.ma-edit__body {
+  display: flex;
+  flex-direction: column;
+  /* The frame's section gaps run 34–58px; one number throughout, for the same
+     reason the field gutters are normalised below. */
+  gap: 40px;
+  padding: 48px 48px 32px;
+}
+
+.ma-edit__title {
+  font-size: 36px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--hb-text-night);
+}
+
+/* Section headings — "Account Settings", "Mailing Address", "Additional
+   Information". 20px bold in all three. */
+.ma-edit__label {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--hb-text-night);
+}
+
+.ma-edit__section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ma-edit__stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
+/* Two fields side by side. The frame varies the gutter 18–22px between rows;
+   20px throughout, since a table of near-identical rows reads worse with the
+   gaps subtly different. */
+.ma-edit__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+/* Country + Address: 244 and 504 in a 770 column. Proportional rather than
+   fixed, so the pair keeps its shape as the card narrows. */
+.ma-edit__row--wide { grid-template-columns: minmax(0, 244fr) minmax(0, 504fr); }
+
+/* City / State / ZIP, and the licence row. */
+.ma-edit__row--thirds { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+/* "Drivers Licence", its Verify ID link and the passport tick share one line,
+   the tick pushed to the far right. Wraps rather than crushing the link. */
+.ma-edit__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 24px;
+}
+
+.ma-edit__headCheck { margin-left: auto; }
+
+/* The kit puts a calendar mark on every `mask="date"` field as a hint that a
+   date belongs there. It is decorative — there is no picker behind it — and
+   this frame draws the expiry with its tick alone, so it is dropped here
+   rather than sitting beside one. The mask itself is what we wanted. */
+.ma-edit__nocal .hb-field__icon--affordance { display: none; }
+
+/* A link in every respect but the element — there is no ID flow behind it yet,
+   so it stays a button and gets a real focus ring. */
+.ma-edit__verify {
+  padding: 2px 2px;
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--hb-text-night);
+  text-decoration: underline;
+}
+.ma-edit__verify:focus-visible { outline: none; box-shadow: var(--hb-focus-ring); }
+
+/* "Alternate Contact" / "Emergency Contact" — a rank below the 20px section
+   headings, and the frame sets them SemiBold rather than Bold. */
+.ma-edit__sub {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--hb-text-night);
+}
+
+.ma-edit__contact {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* The sub-heading sits closer to its first row than the rows do to each
+   other — it belongs to them rather than separating them. */
+.ma-edit__contact .ma-edit__sub { margin-bottom: -12px; }
+
+/* The two opt-ins are one group, tighter than the 16px section rhythm. */
+.ma-edit__prefs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Valid, WITHOUT the tick. For the select (whose chevron already occupies the
+   icon slot) and the address search fields (whose magnifier does) — the frame
+   shows both as the green border alone. */
+.ma-edit__valid .hb-field__box { border-color: var(--hb-field-border-success, #028a0c); }
+
+/* ── The country select ────────────────────────────────────────────────────
+   A real <select>, transparent and on top, over a real <FormField> face. The
+   native picker keeps doing the work — including the wheel on a phone — while
+   the box that shows is the kit's, so it cannot drift from the fields beside
+   it. Same overlay as #99's billing country. */
+.ma-select { position: relative; }
+
+.ma-select__native { position: absolute; inset: 0; z-index: 2; }
+
+.ma-select__native select {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  /* Invisible on the closed control — the face behind it is what shows — but
+     the open list still needs the page font, which form controls do not
+     inherit on their own. */
+  color: transparent;
+  font-family: inherit;
+  font-size: 16px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.ma-select__native select:focus { outline: none; }
+.ma-select__native select option { color: var(--hb-text-night); }
+
+.ma-select__face { position: relative; pointer-events: none; }
+
+.ma-select__chev {
+  position: absolute;
+  top: 16px;
+  right: var(--hb-field-padding-x, 16px);
+  transform: rotate(90deg);
+}
+
+/* Focus lands on the hidden select, so mirror the ring onto the visible face. */
+.ma-select:focus-within .ma-select__face .hb-field__box {
+  border-color: var(--hb-field-border-active, #101318);
+  box-shadow: var(--hb-focus-ring);
+}
+
+.ma-edit__check .hb-check__label {
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 18px;
+  color: var(--hb-text-night);
+}
+
+/* ── Edit action bar ────────────────────────────────────────────────────── */
+.ma-edit__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 20px;
+  padding: 32px 48px;
+  background: var(--ma-panel);
+}
+
+/* Drawn as plain bold text rather than a button box — but it IS a button, so
+   it keeps a hit area, a focus ring and keyboard activation. */
+.ma-edit__cancel {
+  padding: 8px 4px;
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 20px;
+  color: var(--hb-text-night);
+}
+.ma-edit__cancel:hover { text-decoration: underline; }
+.ma-edit__cancel:focus-visible { outline: none; box-shadow: var(--hb-focus-ring); }
+
+/* ── Narrow widths ─────────────────────────────────────────────────────────
+   The frame is desktop-only (1920) — there is no mobile artboard for this
+   screen. Rather than invent one, the grid collapses to a single column so
+   the widget degrades honestly in a narrow Duda row or on a phone. Revisit
+   when the mobile frames land. */
+@media (max-width: 1180px) {
+  .ma-grid {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 20px;
+  }
+  .ma-greeting,
+  .ma-logged-in,
+  .ma-main,
+  .ma-side { grid-column: 1; }
+
+  .ma-logged-in { text-align: left; }
+  .ma-side { max-width: 422px; }
+}
+
+@media (max-width: 720px) {
+  .ma-wrapper { padding: 24px 16px 48px; }
+  .ma-greeting { font-size: 28px; }
+
+  .ma-promo {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 24px;
+  }
+
+  .ma-pay { padding: 24px 20px; }
+  .ma-wrapper .ma-pay__title { margin-bottom: 24px; }
+
+  /* Contacts and documents stop being side by side; the fixed 367px column
+     would otherwise overflow a phone. */
+  .ma-account__body { padding: 24px 20px; }
+  .ma-account__title { font-size: 28px; }
+  .ma-account__cols { flex-direction: column; gap: 28px; }
+  .ma-account__col--contact,
+  .ma-account__alt { width: 100%; }
+
+  .ma-edit__body { padding: 24px 20px; }
+  .ma-edit__title { font-size: 28px; }
+  /* Two 56px fields will not sit side by side on a phone, and three certainly
+     will not. Every row shape collapses to one column. */
+  .ma-edit__row,
+  .ma-edit__row--wide,
+  .ma-edit__row--thirds { grid-template-columns: 1fr; }
+  /* The tick has no far right to sit at once the head has wrapped. */
+  .ma-edit__headCheck { margin-left: 0; }
+  .ma-edit__actions { padding: 20px; }
+
+  .ma-action { padding: 24px 20px; }
+  /* The amount and Pay Now would otherwise crush the label. */
+  .ma-action__due { flex-wrap: wrap; row-gap: 12px; }
+  .ma-action__pay { margin-left: auto; }
+
+  .ma-autopay { flex-direction: column; }
+  .ma-autopay__actions { width: 100%; }
+
+  .ma-lines { width: 100%; }
+
+  /* The balance box stops being a single row: the amount would otherwise sit
+     on top of the prepay tick. */
+  .ma-balance {
+    flex-wrap: wrap;
+    row-gap: 12px;
+  }
+  .ma-balance__left { width: auto; }
+  .ma-balance__right { margin-left: auto; }
+
+  .ma-methods { grid-template-columns: 1fr; }
+
+  .ma-activity__bar { padding: 20px 24px; }
+  .ma-activity__body { padding: 0 24px 20px; }
+
+  .ma-unit__panel { gap: 8px; }
+  .ma-unit__image { width: 120px; height: 88px; }
+
+  .ma-unit__footer { flex-wrap: wrap; padding: 16px 20px; }
+}
+
+/* ── Make a Payment, multi-space (Figma 8905-133037) ───────────────────────
+   One block per space, each with its own checkbox, autopay strip and totals.
+   The blocks are separated by the same 30px the single-space frame leaves
+   between its sections, so one space still looks exactly as it did. */
+.ma-pay-space + .ma-pay-space {
+  margin-top: 30px;
+}
+
+/* The head is a Checkbox now, not a radio — several spaces can be paid at
+   once. Its own negative inset replaces .ma-space-head's, which was tuned to
+   the radio's wider box. */
+.ma-space-head__check {
+  align-items: center;
+  margin-left: -2px;
+}
+
+/* NOT ENROLLED: the frame swaps the tall enrolled strip for a single opt-in
+   row — no card details to show, so the box shrinks to fit and drops the
+   border, which only ever framed the two-column enrolled layout. */
+/* NOT ENROLLED (12239-45883) — just the enrolment checkbox. The older
+   multi-space frame drew this row borderless and called it "Enroll in
+   Autopay"; the state spec relabels it "Autopay Enrollment" and gives it the
+   same 2px chrome as the enrolled card, so all four states are one card. */
+.ma-autopay--offer {
+  display: block;
+  min-height: 60px;
+  padding: 16px 20px;
+}
+
+.ma-autopay__enroll { display: flex; align-items: center; }
+
+/* SemiBold and Night, unlike .ma-autopay__title's #333 — the enrolment label
+   and the "Enrolled in Autopay" heading are different type in the frame. */
+.ma-autopay__enrollLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--hb-text-night);
+}
+
+.ma-autopay__info {
+  flex: none;
+  display: block;
+}
+
+/* The charged-to lines are replaced by this when Update Payment Method is
+   ticked. Capped at the frame's own 350px so it wraps to two lines there and
+   not against the right column. */
+.ma-autopay__updating { max-width: 350px; }
+
+/* CANCELLED (12239-45935) — white, Guidance blue, and a 10px radius rather
+   than the 12 the other three cards use. Padding moves onto the two children
+   so the notice can run the full width of the card. */
+.ma-autopay--cancelled {
+  padding: 0;
+  min-height: 0;
+  background: #fff;
+  border-color: var(--ma-guide);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.ma-autopay--cancelled .ma-autopay__enroll { padding: 15px 16px 10px; }
+
+.ma-autopay__notice {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 14px;
+  background: var(--ma-guide-bg);
+}
+
+.ma-autopay__notice p {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 18px;
+  color: #000;
+}
+
+.ma-autopay__noticeIcon { flex: none; display: block; }
+
+/* ── Make a Payment, mobile (Figma 9007-22768) ─────────────────────────────
+   Desktop keeps the frame's card; on a phone the panel goes full-bleed on the
+   page's own grey, which is what gives the money rows their full width. */
+
+/* Shown/hidden by width — "Change Coverage" is just "Change" on a phone. */
+.ma-only-mobile { display: none; }
+
+/* Mobile-only control; desktop has no such toggle and room for every row. */
+.ma-billing-toggle { display: none; }
+
+/* 720px, matching this widget's other mobile block — a different number
+   would leave a band where only half the mobile rules applied. */
+@media (max-width: 720px) {
+  .ma-only-desktop { display: none; }
+  .ma-only-mobile { display: inline; }
+
+  /* The panel stops being a card here — no radius, no shadow, the page's own
+     grey — so its padding IS the page inset, and the wrapper's 16 was being
+     added on top of it. 26 in total, which is where the frame puts every left
+     edge, and it buys the balance box the 34px that were making its date
+     wrap. */
+  .ma-pay {
+    padding: 25px 10px 32px;
+    background: var(--ma-panel, #f9fafb);
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  /* Autopay: the two actions drop BELOW the card details instead of sitting in
+     a right-hand column, which at 340px would leave both halves too narrow. */
+  .ma-autopay {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+    min-height: 0;
+    background: #fff;
+  }
+
+  .ma-autopay__actions { padding-left: 29px; }
+
+  /* The not-enrolled strip stays a ROW: it is one short line, and the column
+     rule above would drop its info icon onto a second line. */
+  /* --offer is display:block now, so it needs no direction; the cancelled
+     card keeps its own white ground against the mobile rule above. */
+  .ma-autopay--cancelled { background: #fff; }
+  .ma-autopay__detail,
+  .ma-autopay__actions { font-size: 14px; }
+
+  /* 14px money rows, per the frame. */
+  .ma-line__label,
+  .ma-line__amount { font-size: 14px; }
+  .ma-line__label--total,
+  .ma-line__amount--total { font-size: 14px; }
+
+  .ma-billing-toggle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 4px 0 20px 5px;
+    padding: 0;
+    border: 0;
+    background: none;
+    font-family: inherit;
+    font-size: 16px;
+    color: #000;
+    cursor: pointer;
+  }
+
+  .ma-billing-toggle span { text-decoration: underline; }
+  /* The asset points RIGHT, so both states are a rotation of it: down while
+     closed ("this opens"), up while open ("this closes"), which is the pair
+     the two frames draw. */
+  .ma-billing-toggle__chev {
+    width: 24px; height: 24px;
+    transform: rotate(90deg);
+    transition: transform 150ms ease;
+  }
+  .ma-billing-toggle__chev--up { transform: rotate(-90deg); }
+
+  /* Autopay and the money rows are one disclosure — see the panel's note. */
+  .ma-detail--hidden { display: none; }
+
+  /* The row becomes number, address and amount on one line, so the address
+     gives way first: the frame truncates it ("1301 E. Mission A…") rather
+     than wrapping or pushing the amount off the edge. Every ancestor between
+     the flex row and the text needs min-width:0, or the text's own minimum
+     size keeps the row from shrinking at all. */
+  /* The desktop frame outdents the tick past the text column; the mobile one
+     lines it up with every other left edge, so the outdent goes. The -2px
+     optical correction on the box itself stays. */
+  .ma-space-head { gap: 7px; margin-left: 0; }
+  .ma-space-head .hb-check,
+  .ma-space-head .hb-check__label { min-width: 0; }
+
+  .ma-space-head__label {
+    display: block;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .ma-space-head__amount {
+    display: block;
+    flex: none;
+    margin-left: auto;
+    padding-left: 8px;
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 1.3;
+    color: #000;
+  }
+
+  /* 9038-78423 draws this 104px tall and TIGHT: title + pay-through on the
+     left, amount + Past Due on the right OF THE SAME ROW, and the prepay tick
+     alone on a second. The desktop rule's fixed 200px left column is what
+     pushed the amount onto a line of its own at 340px — 200 plus the amount
+     does not fit the card's 304px of content — so here it flexes instead.
+     Row gap is nearly nothing: the frame starts the tick 1px under the block
+     above it. */
+  .ma-balance {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    column-gap: 12px;
+    row-gap: 2px;
+    min-height: 0;
+    padding: 14px 16px 16px;
+  }
+
+  /* A GRID, not wrapping. The two columns' natural widths came to about 3px
+     more than the card has, so the amount kept dropping to a line of its own —
+     and a layout that close to the edge would fall over again on a longer date
+     or a bigger figure. Placing them explicitly means it cannot: the left
+     column takes what is left (minmax(0,1fr), so it can shrink) and the tick
+     spans both underneath. */
+  .ma-balance__left { grid-column: 1; grid-row: 1; width: auto; min-width: 0; }
+  .ma-balance__right { grid-column: 2; grid-row: 1; justify-self: end; }
+  .ma-balance__prepay { grid-column: 1 / -1; grid-row: 2; }
+
+  /* 16px on the phone, against the desktop frame's 18. */
+  .ma-balance__title { font-size: 16px; }
+
+  .ma-balance__prepay {
+    order: 3;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .ma-balance__right { margin-left: auto; }
+
+  .ma-stepper { display: flex; align-items: center; gap: 6px; padding-left: 22px; }
+
+  .ma-stepper__btn {
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 1px solid var(--ma-ink, #101318);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--ma-ink, #101318);
+    cursor: pointer;
+  }
+
+  .ma-stepper__btn:active { background: var(--ma-ink, #101318); color: #fff; }
+
+  /* Reads a value rather than editing one — the buttons are the control, so a
+     text input would invite typing that nothing validates. */
+  .ma-stepper__value {
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    border: 1px solid #a5b4bf;
+    border-radius: 8px;
+    background: #fff;
+    font-size: 16px;
+    color: var(--ma-ink, #101318);
+  }
+
+  .ma-stepper__unit { font-size: 14px; color: #000; }
+
+  /* Tiles stack full width, and APPLE PAY LEADS on mobile — the frame's order,
+     reversed from desktop. `order` rather than reordering the markup, so one
+     DOM serves both. */
+  .ma-methods { grid-template-columns: 1fr; gap: 12px; }
+  .ma-method { height: 64px; font-size: 18px; font-weight: 700; }
+  /* ALL FOUR need an order. Setting it on only the first two pushed them
+     behind the outline tiles, which kept the default `order: 0`. */
+  .ma-method:nth-child(1) { order: 2; }  /* Google Pay */
+  .ma-method:nth-child(2) { order: 1; }  /* Apple Pay leads on mobile */
+  .ma-method:nth-child(3) { order: 3; }
+  .ma-method:nth-child(4) { order: 4; }
+}
+
+/* ── The shared payment forms, expanded (@shared/paymentForms) ────────────
+   The panel and everything inside it is #99's, styled by paymentForms.css.
+   Only its placement in this panel is ours: .ma-methods has an 18px gap and a
+   20px top margin, and the form sits in that same rhythm. */
+.ma-payform { margin-top: 18px; }
+
+/* The method that is NOT open, relocated below the panel. It leaves the 2-up
+   grid, so it has to be told to fill the row — .ma-method itself only sets
+   height and padding, the width came from the grid track. */
+.ma-method--alt { width: 100%; margin-top: 18px; }

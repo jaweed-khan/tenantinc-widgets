@@ -1245,7 +1245,20 @@ export function NearbyLocations({
              refLoc === null, so the loading one has to be tested first. */
           <div className="nl-map"><span className="nl-skeleton-block nl-skeleton-map" /></div>
         ) : mapCenter && mapPoints.length ? (
-          <NearbyMap center={mapCenter} points={mapPoints} className="nl-map" />
+          <NearbyMap
+            center={mapCenter}
+            points={mapPoints}
+            className="nl-map"
+            /* Draggable and zoomable; the pins reproject against the live map.
+               With no Maps key this is the frozen embed exactly as before. */
+            interactive
+            /* Only when the centre is a REAL place — the visitor's location or
+               this page's property. `mapCenter` falls back to the mean of the
+               pins, and a "you are here" dot on an average tells the viewer
+               something untrue. That fallback is the common path here, since
+               geolocation is usually declined and `propertyId` is optional. */
+            showCenterMarker={refLoc !== null}
+          />
         ) : (
           <div className="nl-map"><span className="nl-map-selected">Map unavailable</span></div>
         )}

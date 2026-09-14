@@ -9,7 +9,6 @@ import {
   JunkFeeDisclaimer,
   PlayCircleIcon,
 } from './Pricing';
-import defaultImg from '../assets/tenantinc-default.png';
 import { unitImageSrc, unitImageOnError } from './unitImage';
 
 const SIZE_LABEL: Record<UnitSize, string> = {
@@ -50,12 +49,15 @@ export function DefaultCard({ unit, config }: { unit: Unit; config: WidgetConfig
     <div className="sl-default-card">
       <div className="sl-dv-display">
         <div className="sl-dv-image-col">
-          <img
-            className="sl-dv-img"
-            src={unitImageSrc(unit, defaultImg)}
-            alt="Storage Unit"
-            onError={unitImageOnError(unit, defaultImg)}
-          />
+          {/* No artwork ⇒ no element — see unitImage.ts. */}
+          {unitImageSrc(unit) && (
+            <img
+              className="sl-dv-img"
+              src={unitImageSrc(unit)}
+              alt="Storage Unit"
+              onError={unitImageOnError(unit)}
+            />
+          )}
           <a href="#" className="sl-dv-see-fits">
             See what fits <PlayCircleIcon />
           </a>

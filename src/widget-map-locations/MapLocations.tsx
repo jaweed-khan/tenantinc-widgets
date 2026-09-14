@@ -1285,6 +1285,10 @@ export function MapLocations({
                 height="100%"
                 renderPin={renderPin}
                 hideCenterMarker
+                /* Draggable and zoomable; the bubbles above reproject against
+                   the live map so they stay on their properties. With no Maps
+                   key this falls back to the frozen embed unchanged. */
+                interactive
               />
             )}
           </div>

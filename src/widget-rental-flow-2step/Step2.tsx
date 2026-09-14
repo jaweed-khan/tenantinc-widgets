@@ -3,7 +3,7 @@ import { CalendarIcon, FileArrowIcon, ChevronSolidIcon, InfoIcon, CreditCardIcon
 import { PlanCoverageBody, ProtectionPlanModal } from './ProtectionPlanModal';
 import { LeaseModal } from './LeaseModal';
 import { RfCheckbox } from './RfCheckbox';
-import { BankForm, CardForm, PaymentFormSkeleton, type CardFormValue } from './PaymentSection';
+import { BankForm, CardForm, PaymentFormSkeleton, type CardFormValue, type BankFormValue } from '@shared/paymentForms';
 // The protection-plan lightbox's styles (rf-pp-*) live here. Imported from Step2
 // rather than the shell because Step2 is now the only screen that mounts it.
 import './screens.css';
@@ -157,6 +157,7 @@ export type AutopayMode = 'default' | 'optional' | 'preselected' | 'fee';
 export function Step2({
   moveIn, plans = [], leaseDocName, onEditDate, payNowTotal, onPaymentComplete,
   brochureUrl, onPlanChange, paying, payError, contact, gpPublicKey, autopayMode,
+  gatewayPending, zipOnlyBilling,
 }: {
   moveIn: Date;
   /**
@@ -186,6 +187,9 @@ export function Step2({
     /** Entered card + billing details. Present only on the static card path —
      *  the hosted-fields path never has card data to give. */
     card?: CardFormValue;
+    /** Entered bank account + billing details, on the Pay by Bank path.
+     *  Mutually exclusive with `card`. */
+    bank?: BankFormValue;
     /** Step 2's own contact fields, which the shopper may have edited after
      *  step 1, so these win over the ones captured there. */
     contact?: { first: string; last: string; email: string; phone: string; businessName?: string };
@@ -207,6 +211,12 @@ export function Step2({
   payError?: string;
   /** Global Payments PUBLIC key — turns on hosted (iframe) card fields. */
   gpPublicKey?: string;
+  /** The property's gateway is still being looked up, so which card form to
+   *  draw is not yet known. The card row waits rather than guessing — swapping
+   *  form mid-typing would throw away what the shopper had entered. */
+  gatewayPending?: boolean;
+  /** tenant_payments: the card panel asks for the billing ZIP only. */
+  zipOnlyBilling?: boolean;
 }) {
   // Ticked when step 1 said this is a business rental, so the shopper does not
   // answer the same question twice and its fields open ready to fill.
@@ -409,9 +419,10 @@ export function Step2({
   };
 
   /** "Pay Now" — hands the parent everything the rental APIs need. */
-  const payStatically = (card?: CardFormValue) => onPaymentComplete?.({
+  const payStatically = (card?: CardFormValue, bank?: BankFormValue) => onPaymentComplete?.({
     firstName: first.trim() || 'there',
     card,
+    bank,
     contact: business
       ? { ...splitBusinessName(bizName), email: email.trim(), phone, businessName: bizName.trim() }
       : { first: first.trim(), last: last.trim(), email: email.trim(), phone },
@@ -754,9 +765,9 @@ export function Step2({
               {formLoading ? (
                 <PaymentFormSkeleton rows={payMethod === 'bank' ? 3 : 2} />
               ) : payMethod === 'card' ? (
-                <CardForm total={payNowTotal ?? 0} onPay={payStatically} busy={paying} gpPublicKey={gpPublicKey} payLabel={agreeLabel} />
+                <CardForm total={payNowTotal ?? 0} onPay={payStatically} busy={paying} gpPublicKey={gpPublicKey} gatewayPending={gatewayPending} zipOnlyBilling={zipOnlyBilling} payLabel={agreeLabel} />
               ) : (
-                <BankForm total={payNowTotal ?? 0} onPay={() => payStatically()} payLabel={agreeLabel} />
+                <BankForm total={payNowTotal ?? 0} onPay={(bank) => payStatically(undefined, bank)} busy={paying} payLabel={agreeLabel} />
               )}
             </section>
           )}

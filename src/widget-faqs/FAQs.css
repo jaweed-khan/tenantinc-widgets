@@ -167,7 +167,7 @@
 }
 
 .faq-link:hover {
-  color: #f45f30;
+  color: var(--color_1, #f45f30);
 }
 
 .faq-empty {

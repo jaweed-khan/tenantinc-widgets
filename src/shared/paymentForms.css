@@ -1,0 +1,426 @@
+/* ===========================================================================
+   Card and bank payment forms — the stylesheet for `@shared/paymentForms`.
+   Figma 10080-30277 (Credit / Debit), 10080-28749 (Pay by Bank),
+   8507-24610 (the skeleton beat).
+
+   Moved out of #99's screens.css when #19's My Account needed the same forms.
+   The `rf-` prefix is historical (it was #99's) and is kept because none of
+   these rules were ever wrapper-scoped — they already worked anywhere.
+
+   `.rf-sr-only` and `.rf-req` are restated here rather than imported: they are
+   two lines each, #99 also declares them for its own markup, and a form that
+   silently loses its red asterisk in a second widget is worse than a duplicate.
+--------------------------------------------------------------------------- */
+
+.rf-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.rf-req { color: #e53935; margin-left: 2px; }
+
+/* Collapsed method button — 2px dark outline. */
+.rf-method {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  height: 64px;
+  border: 2px solid var(--hb-text-night, #101318);
+  border-radius: 12px;
+  background: transparent;
+  color: #000;
+  font-family: inherit;
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+}
+.rf-method:hover { background: rgba(16, 19, 24, 0.04); }
+
+/* Expanded panel — 2px CTA border. */
+.rf-method-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 30px;
+  border: 2px solid var(--hb-cta, #f45f30);
+  border-radius: 12px;
+  background: #f9fafb;
+}
+.rf-method-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #000;
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+}
+
+/* Skeleton stand-in while a static payment form "loads" (Figma 8507-24610).
+   Same 20px rhythm and two-up rows as the real form it replaces, so the panel
+   doesn't change height when the fields arrive. */
+.rf-pay-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.rf-pay-skeleton-row {
+  display: flex;
+  gap: 20px;
+}
+
+.rf-pay-skeleton-row > * { flex: 1 1 0; min-width: 0; }
+
+@media (max-width: 640px) {
+  .rf-pay-skeleton-row { flex-direction: column; }
+}
+
+/* Two-up field grid; collapses on narrow widths. */
+.rf-pay-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+/* Licence row — Figma 10078-25737. Three equal columns; `minmax(0, 1fr)`
+   rather than `1fr` so a long value cannot push a column past its share. */
+.rf-sx-grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+
+.rf-paynow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 64px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--hb-cta, #f45f30);
+  color: var(--hb-white, #fff);
+  font-family: inherit;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  transition: background var(--hb-transition, 0.15s ease);
+}
+/* The kit's CTA hover model, matched exactly: name a real BACKGROUND, darkened
+   12% toward black (22% on press), rather than dimming with a filter.
+   `filter: brightness()` leaves `background` unset, so a host rule like the dev
+   harness's `button:hover { background: #f3f4f6 }` — (0,1,1), which outranks
+   this single class — paints grey over the CTA and the filter merely dims THAT.
+   `filter: none` clears the old value in case anything else still sets one. */
+.rf-paynow:hover:not(:disabled) {
+  filter: none;
+  background: color-mix(in srgb, var(--hb-cta, #f45f30) 88%, #000);
+}
+.rf-paynow:active:not(:disabled) {
+  filter: none;
+  background: color-mix(in srgb, var(--hb-cta, #f45f30) 78%, #000);
+}
+
+@media (max-width: 720px) {
+  .rf-pay-grid { grid-template-columns: 1fr; }
+  .rf-sx-grid3 { grid-template-columns: 1fr; }
+  .rf-payment, .rf-method-panel { padding: 20px; }
+  .rf-wallets { flex-direction: column; }
+  .rf-autopay-card { padding: 0 16px; }
+}
+
+/* ── Select: native control layered over a FormField "face" ──────────────── */
+
+.rf-select { position: relative; }
+/* The real control sits transparent and on top, so the native picker (and the
+   mobile wheel) still does the work; the visual is the FormField underneath. */
+.rf-select-native { position: absolute; inset: 0; z-index: 2; }
+.rf-select-native select {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: transparent;
+  /* Form controls do not inherit the page font — browsers give them the system
+     UI one unless told otherwise. Invisible on the closed control (the text is
+     transparent; the face behind it is what shows) but not in the open list. */
+  font-family: inherit;
+  font-size: 16px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.rf-select-native select:focus { outline: none; }
+/* Options still need to be readable in the open dropdown. */
+.rf-select-native select option { color: var(--hb-text-night, #101318); }
+.rf-select-face { position: relative; pointer-events: none; }
+.rf-select-chev {
+  position: absolute;
+  top: 16px;
+  right: var(--hb-field-padding-x, 16px);
+  color: var(--hb-grayscale-medium, #637381);
+  transform: rotate(90deg);
+}
+
+/* A state icon appears in the field's own icon slot, and the chevron is drawn
+   OVER the face rather than living in that slot — so it landed on top of the
+   red alert mark. Step aside by exactly what the field added: a 24px icon plus
+   the slot's gap. Adjacent-sibling because the chevron follows the FormField
+   inside .rf-select-face. Success is covered too: the Select does not set it
+   today, but the geometry is identical and finding this again would be
+   irritating. */
+.rf-select-face .hb-field--error + .rf-select-chev,
+.rf-select-face .hb-field--success + .rf-select-chev {
+  right: calc(var(--hb-field-padding-x, 16px) + 24px + var(--hb-field-icon-gap, 8px));
+}
+/* Focus lands on the hidden select, so mirror the ring onto the visible face. */
+.rf-select:focus-within .rf-select-face .hb-field__box {
+  border-color: var(--hb-field-border-active, #101318);
+  box-shadow: var(--hb-focus-ring);
+}
+
+/* ── Card number / expiry / CVV row (10080-30277) ────────────────────────── */
+
+/* Wraps rather than crushing. One bordered box still, but at narrow widths the
+   card number keeps the first line to itself and expiry + CVV drop to a second
+   — 16 formatted digits need ~180px to be readable, and in step 2's column at a
+   901px viewport this row had about 60px to offer them. min-height plus a fixed
+   cell height (not height:100%) is what lets the box grow to two lines;
+   align-content stops the extra space being spread between them. */
+.rf-cardrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  align-content: center;
+  column-gap: 8px;
+  row-gap: 0;
+  min-height: var(--hb-field-height, 56px);
+  padding: 0 15px;
+  border: var(--hb-field-border-width, 1px) solid var(--hb-field-border, #a5b4bf);
+  border-radius: var(--hb-field-radius, 8px);
+  background: var(--hb-white, #fff);
+}
+.rf-cardrow:focus-within {
+  border-color: var(--hb-field-border-active, #101318);
+  box-shadow: var(--hb-focus-ring);
+}
+/* align-self so neither is stretched by a wrapped line taller than itself. */
+.rf-cardrow-ico { flex-shrink: 0; align-self: center; color: var(--hb-grayscale-medium, #637381); }
+/* Each cell is its own labelled field inside the shared border. Geometry is
+   the kit's (FormField.css) rather than reinvented — the ask was for "the same
+   effect as the text input boxes", and those offsets are already proven in an
+   identical 56px box. */
+.rf-cardcell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  /* Fixed, not 100%: once the row can wrap its own height is auto, and a
+     percentage against an auto height resolves to nothing. */
+  height: var(--hb-field-height, 56px);
+  min-width: 0;
+}
+/* 180px is the floor for 16 formatted digits at 16px. Below that the pair
+   beside it goes to the next line rather than the number being squeezed. */
+.rf-cardcell--number { flex: 1 1 180px; min-width: 180px; }
+/* Expiry and CVV wrap as a unit — see the note in PaymentSection.tsx. Fixed
+   widths inside, so they are the size they were designed at on either line. */
+.rf-cardrow-short {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.rf-cardcell--exp { flex: 0 0 88px; }
+/* Both cells are labelled MM / YY now — GP's frame said MM / YYYY until the
+   placeholder was shortened, and at its resting 16px that ran out of the 88px
+   cell and under CVV. The extra width is KEPT rather than reverted with the
+   label: the frame renders its own placeholder and the original failure was it
+   overflowing, so shrinking this back wants a look at a live frame first. */
+.rf-cardcell--exp-wide { flex: 0 0 116px; }
+.rf-cardcell--cvv { flex: 0 0 58px; }
+
+.rf-cardrow-input {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--hb-field-text, #101318);
+  font-family: inherit;
+  font-size: var(--hb-font-size-value, 16px);
+  line-height: var(--hb-line-height-value, 20px);
+  /* CENTRED, no offset. The 15px that used to be here pushed the value onto a
+     lower line to clear a floated label — but these cells hide their label
+     rather than float it, so there is nothing above to clear, and the offset
+     only meant the text landed 15px below where the placeholder had been.
+     .rf-cardcell is justify-content: center, so removing it puts the value
+     exactly where the label sits. */
+  text-overflow: ellipsis;
+}
+/* placeholder=" " must never paint — the label is the placeholder here. */
+.rf-cardrow-input::placeholder { color: transparent; }
+
+.rf-cardcell-label {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  transform-origin: left center;
+  color: var(--hb-field-label, #637381);
+  font-size: var(--hb-font-size-value, 16px);
+  line-height: var(--hb-line-height-value, 20px);
+  white-space: nowrap;
+  pointer-events: none;
+  transition: opacity var(--hb-transition, .15s ease);
+}
+/* HIDDEN, not floated — these three cells behave like a plain placeholder:
+   gone the moment the cell is clicked, gone for good once it holds a value,
+   back if it is left empty. The floating treatment the other fields use needs
+   the parent to know whether a field is empty, and for the two hosted cells
+   that lives inside a cross-origin frame; this rule needs no such knowledge.
+
+   `:not(:placeholder-shown)` is what makes autofill work — the browser fills
+   without firing input events, but the placeholder stops showing, so the label
+   goes anyway. opacity rather than display, so nothing reflows as it goes. */
+.rf-cardrow-input:focus + .rf-cardcell-label,
+.rf-cardrow-input:not(:placeholder-shown) + .rf-cardcell-label {
+  opacity: 0;
+}
+/* The hosted cells' equivalent. Their value is in a cross-origin frame, so
+   :placeholder-shown cannot see it and the parent is told from JS instead. */
+.rf-cardcell-label--gone { opacity: 0; }
+
+/* Valid card row — one border, so it turns green as a unit (Figma 10080-28126). */
+.rf-cardrow--valid { border-color: var(--hb-field-border-success, #028a0c); }
+.rf-cardrow-tick { flex: 0 0 auto; align-self: center; color: var(--hb-ada-green, #028a0c); }
+/* visibility, NOT display — the slot has to keep its width so nothing beside it
+   shifts. It also drops the icon out of the accessibility tree, which display
+   would too but width would not. */
+.rf-cardrow-tick--pending { visibility: hidden; }
+/* An expiry that is complete but unusable. */
+.rf-cardrow--error { border-color: var(--hb-field-border-error, #e53935); }
+/* ── Payment error banner (Figma 12029-93132) ─────────────────────────────
+   White card on the panel's #f9fafb, sitting directly under the "Credit /
+   Debit" head so the message is beside the fields it is about rather than
+   beside the button that refused. 16px round, 16px padding, a 24px alert mark
+   and 14px/18px red text — the frame's #d73632, which is a shade off the kit's
+   --hb-ada-red used for the per-field messages; the banner is a heavier thing
+   than a field hint and the design distinguishes them. */
+.rf-payerr {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  background: #fff;
+  border-radius: 16px;
+  color: #d73632;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 18px;
+}
+.rf-payerr-ico { flex: 0 0 auto; color: #d73632; }
+
+.rf-cardrow-msg {
+  /* .rf-method-panel is a 20px flex column, so these siblings already sit 20px
+     apart; -16px pulls the message back to 4px under the row it belongs to. */
+  margin: -16px 0 0;
+  color: var(--hb-ada-red, #e53935);
+  font-size: var(--hb-font-size-label, 12px);
+  line-height: var(--hb-line-height-label, 15px);
+}
+
+
+.rf-valid .hb-field__box { border-color: var(--hb-field-border-success, #028a0c); }
+
+
+/* ---------------------------------------------------------------------------
+   Global Payments hosted fields.
+
+   The card number and expiry are iframes on GP's origin, so none of the rules
+   above can reach the input inside them — that styling is handed to GP as a
+   literal-value object (FIELD_STYLES in gpHostedFields.ts). What is left for
+   us is the box the frame sits in, which has to occupy the cell exactly as the
+   plain input did or the row changes height when hosted mode wins.
+--------------------------------------------------------------------------- */
+.rf-gpfield {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  /* Centred with .rf-cardrow-input, and for the same reason — the label is
+     hidden rather than floated, so the frame's own placeholder has to land on
+     the line its digits will take. The frame IS this box; the offset must not
+     be repeated on the input inside it either. */
+  height: 20px;
+  /* GP sizes its own iframe; clip rather than let a tall one push the row. */
+  overflow: hidden;
+}
+
+.rf-gpfield iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+/* Kept in the DOM — GP resolves its targets by selector — but out of the way
+   whenever the plain inputs are the ones in use. */
+.rf-gpfield--off { display: none; }
+
+.rf-paynow-wrap { position: relative; }
+/* GP's submit frame covers our button completely. It is transparent (see
+   FIELD_STYLES) so ours is what shows through, while the click lands inside
+   their iframe, which is the only place a token can be asked for. */
+.rf-gp-submit {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+.rf-gp-submit iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.rf-gp-submit--off { display: none; }
+/* Frames requested but not yet registered. Dimmed rather than hidden: the row
+   keeps its height, so nothing shifts when the fields appear. */
+.rf-cardrow--loading { opacity: 0.55; }
+
+/* ── Card row on a phone: ONE line ────────────────────────────────────────
+   The wrap above is right in step 2's desktop column, where the row can be
+   squeezed to ~60px. On a phone the row has the full screen width and the
+   design keeps Card Number, MM/YY and CVV on a single line — so here the
+   width is reclaimed instead of the pair being dropped:
+
+     no leading card icon      +32px  (the field is unmistakably a card field
+                                       already, given its own placeholder)
+     14px text, tighter cells  the pair goes 182px -> 136px
+
+   That leaves the number ~150px, enough for 19 formatted characters at 14px.
+   640px matches this stylesheet's other mobile blocks. */
+@media (max-width: 640px) {
+  .rf-cardrow {
+    flex-wrap: nowrap;
+    column-gap: 6px;
+    padding: 0 12px;
+  }
+
+  .rf-cardrow-ico { display: none; }
+
+  /* No floor any more — it is what makes the row wrap. It still gets every
+     pixel the two fixed cells leave, which is the widest it can be. */
+  .rf-cardcell--number { flex: 1 1 auto; min-width: 0; }
+
+  .rf-cardrow-short { gap: 6px; flex: 0 0 auto; }
+  .rf-cardcell--exp,
+  .rf-cardcell--exp-wide { flex: 0 0 76px; }
+  .rf-cardcell--cvv { flex: 0 0 52px; }
+
+  .rf-cardrow-input,
+  .rf-cardcell-label { font-size: 14px; }
+}

@@ -660,6 +660,8 @@
 .pi-lb-thumbs::-webkit-scrollbar { display: none; }
 
 .pi-lb-thumb {
+  /* Positioning context for .pi-lb-thumb-play, which centres on the thumb. */
+  position: relative;
   flex: 0 0 calc((100% - 7 * 8px) / 8);
   /* Square. Capped so that when the row is short — or wide with few images —
      the thumbs stay thumbnails rather than growing into slabs; the cap is what
@@ -1439,4 +1441,67 @@ span.pi-lb-img {
   width: 100%;
   height: 100%;
   border-radius: inherit;
+}
+
+/* ── Gallery video ─────────────────────────────────────────────────────────
+   A video slide is a POSTER until it is clicked, then the same box becomes the
+   player. Both carry .pi-gallery-img / .pi-lb-img so they inherit the slide's
+   own sizing and the track needs no special case — see VideoSlide.tsx for why
+   the iframe is not mounted up front. */
+.pi-video-poster {
+  border: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* The background is set inline — either the derived poster frame or the
+     gradient fallback — so no background-* defaults are declared here; the
+     shorthand would reset them anyway. */
+}
+/* Only the LIGHTBOX poster is a button. The inline one renders as an inert
+   span inside the gallery's own button (a nested control would be invalid),
+   so it must not advertise a click it cannot take — the gallery handles it. */
+button.pi-video-poster { cursor: pointer; }
+.pi-video-play { display: flex; line-height: 0; transition: transform 0.15s ease; }
+button.pi-video-poster:hover .pi-video-play { transform: scale(1.06); }
+.pi-video-poster:focus-visible { outline: 3px solid #fff; outline-offset: -3px; }
+
+/* The player itself. `iframe` is specific enough to beat the generic
+   span/img rules above without !important. */
+iframe.pi-gallery-img,
+iframe.pi-lb-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 12px;
+  background: #000;
+}
+/* The lightbox cell centres a contained image; a player fills it instead. */
+iframe.pi-lb-img { position: relative; inset: auto; }
+
+/* Play badge on a thumbnail — smaller than the slide's, and inert: the whole
+   thumbnail is already the button. */
+.pi-lb-thumb-play {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(16, 19, 24, 0.72);
+  border: 1.5px solid #fff;
+  pointer-events: none;
+}
+.pi-lb-thumb-play::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-left: 7px solid #fff;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
 }

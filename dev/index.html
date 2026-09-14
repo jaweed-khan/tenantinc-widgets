@@ -106,6 +106,7 @@
     <button class="page-tab" data-page="blogs-listing" onclick="showPage('blogs-listing')">Blog Listing Page</button>
     <button class="page-tab" data-page="blog-post" onclick="showPage('blog-post')">Blog Post Page</button>
     <button class="page-tab" data-page="login" onclick="showPage('login')">Login Page</button>
+    <button class="page-tab" data-page="my-account" onclick="showPage('my-account')">My Account</button>
     <button class="page-tab" data-page="value-tiers" onclick="showPage('value-tiers')">Value Tiers page</button>
     <button class="page-tab" data-page="rental-flow" onclick="showPage('rental-flow')">Rental Flow</button>
     <button class="page-tab" data-page="city" onclick="showPage('city')">City page</button>
@@ -244,6 +245,9 @@
             <option value="6jyJ1irgBq">Storelocal Lancaster — Lancaster, CA</option>
             <option value="lBNDWS8N2g">Storelocal Waikele — Waipahu, HI</option>
           </select>
+        </label>
+        <label>Maps proxy base:
+          <input id="pi-maps-proxy" type="text" placeholder="default proxy" title="Proxy that serves the Maps key from /api/maps/config. No key is held here. Blank uses the shared default; a proxy with no key configured keeps the keyless embed." style="width:250px; padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px;" oninput="reinitPropertyInfo()" />
         </label>
         <label>
           Display mode:
@@ -689,6 +693,52 @@
 
   </div><!-- /#page-login -->
 
+  <div id="page-my-account" class="page" hidden>
+
+    <!-- ── widget-my-account ────────────────────────────────────────────── -->
+    <div class="widget-section">
+      <h2>widget-my-account — My Account (#19)</h2>
+      <div id="my-account-container" class="widget-container"></div>
+
+      <div class="controls">
+        <div class="controls-group">
+          <span class="controls-group-label">Signed-in user</span>
+          <label>
+            Name:
+            <input id="ma-name" type="text" value="Sneha" oninput="reinitMyAccount()" />
+          </label>
+          <label>
+            Email:
+            <input id="ma-email" type="text" value="sneha.jose@storelocal.com" oninput="reinitMyAccount()" />
+          </label>
+        </div>
+        <div class="controls-group">
+          <span class="controls-group-label">Starting view</span>
+          <label>
+            View:
+            <select id="ma-view" onchange="reinitMyAccount()">
+              <option value="account">Account Info (default) — 8815-115354</option>
+              <option value="payment">Make a Payment — 9030-31458</option>
+              <option value="edit">Edit — 8815-115876</option>
+            </select>
+          </label>
+        </div>
+        <div class="controls-group">
+          <span class="controls-group-label">Promo override</span>
+          <label>
+            Title:
+            <input id="ma-promo-title" type="text" value="" placeholder="follows the view" oninput="reinitMyAccount()" />
+          </label>
+          <label>
+            Button:
+            <input id="ma-promo-cta" type="text" value="" placeholder="Enroll / Shop Now" oninput="reinitMyAccount()" />
+          </label>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /#page-my-account -->
+
   <div id="page-value-tiers" class="page" hidden>
 
   <!-- ── widget-tier-selection ────────────────────────────────────────── -->
@@ -1048,7 +1098,7 @@
   <script>
     // Harness page switcher — all widgets stay initialised; we just show/hide pages.
     // The active tab is persisted to the URL (?page=…) so a refresh keeps it.
-    var PAGES = ['property', 'blogs-listing', 'blog-post', 'login', 'value-tiers', 'rental-flow', 'city', 'homepage', 'ui-kit'];
+    var PAGES = ['property', 'blogs-listing', 'blog-post', 'login', 'my-account', 'value-tiers', 'rental-flow', 'city', 'homepage', 'ui-kit'];
 
     // Per-page container ids for the widgets that appear on more than one page.
     var NAV_CONTAINERS = {
@@ -1343,6 +1393,11 @@
       // propertyId is OMITTED when blank rather than passed as '', so the widget
       // keeps its config.json fallback instead of being handed an empty id.
       if (id) props.propertyId = id;
+      // Proxy base, NOT a key — the harness never holds one. Blank uses the
+      // shared default proxy; if that has no key configured the map stays the
+      // keyless embed, so leaving this empty tests the fallback too.
+      var mp = document.getElementById('pi-maps-proxy');
+      if (mp && mp.value.trim()) props.mapsProxyBase = mp.value.trim();
       return props;
     }
 
@@ -1539,6 +1594,39 @@
     require(['/dist/widget-account-login.js'], function (widget) {
       accountLoginWidget = widget;
       widget.init({ container: document.getElementById('account-login-container'), props: getAccountLoginProps() });
+    });
+
+    // ── My Account (#19) ─────────────────────────────────────────────────
+    // Two views over static data (Figma 8815-115354 default, 9030-31458
+    // payment). These controls drive the greeting, the promo copy and which
+    // view it opens on — the widget's only real props.
+    var myAccountWidget = null;
+
+    function getMyAccountProps() {
+      return {
+        userName:   document.getElementById('ma-name').value,
+        userEmail:  document.getElementById('ma-email').value,
+        // Blank = send nothing, so the widget falls back to whichever frame's
+        // copy the current view calls for rather than an empty heading.
+        promoTitle:  document.getElementById('ma-promo-title').value || undefined,
+        promoCta:    document.getElementById('ma-promo-cta').value || undefined,
+        // Only the STARTING view — Pay Now and Account Info switch it in place.
+        initialView: document.getElementById('ma-view').value,
+      };
+    }
+
+    function reinitMyAccount() {
+      if (myAccountWidget) {
+        myAccountWidget.init({
+          container: document.getElementById('my-account-container'),
+          props: getMyAccountProps(),
+        });
+      }
+    }
+
+    require(['/dist/widget-my-account.js'], function (widget) {
+      myAccountWidget = widget;
+      widget.init({ container: document.getElementById('my-account-container'), props: getMyAccountProps() });
     });
 
     var tierSelectionWidget = null;

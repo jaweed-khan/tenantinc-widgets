@@ -1,0 +1,111 @@
+/* Fills whatever box the caller gives it — #03's map card is 317px tall and
+   16px-rounded, and this inherits both rather than restating them. */
+.im-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  overflow: hidden;
+}
+
+.im-frame,
+.im-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/* The canvas sits above the iframe and is empty until the API paints into it,
+   so the iframe shows through in the meantime and there is no blank frame. */
+.im-canvas { z-index: 1; }
+
+/* UNTIL the real map exists, the canvas is an empty box lying on top of the
+   iframe — and an element with a z-index still captures pointer events even
+   with nothing drawn in it. Without this, a site with no key configured would
+   show its map and be unable to drag it at all: every gesture would land on the
+   empty div instead of the embed underneath. Worse than not upgrading. */
+.im-canvas--idle { pointer-events: none; }
+
+/* Google draws its own focus ring inside the canvas; ours would double it. */
+.im-canvas:focus { outline: none; }
+
+/* Bottom-LEFT, opposite the zoom controls: it appears while the map is being
+   dragged around, and landing under the finger already on the + / − would be
+   the one place it must not be. */
+.im-reset {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 2;
+}
+
+.im-reset-btn {
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: #fff;
+  color: #101318;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(16, 19, 24, 0.28);
+  /* The map pans under a drag; without this a press-and-drag from the button
+     selects its label instead. */
+  user-select: none;
+}
+
+.im-reset-btn:hover { background: #f2f4f7; }
+.im-reset-btn:active { background: #e5e9ee; }
+.im-reset-btn:focus-visible {
+  outline: 2px solid var(--hb-cta, #f45f30);
+  outline-offset: 2px;
+}
+
+.im-zoom {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(16, 19, 24, 0.28);
+}
+
+.im-zoom-btn {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  background: #fff;
+  color: #101318;
+  font-family: inherit;
+  /* 20px so the + and − read at the same weight as Google's own controls. */
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  /* The map pans under a drag; without this a press-and-drag from a button
+     selects its glyph instead. */
+  user-select: none;
+}
+
+.im-zoom-btn:hover { background: #f2f4f7; }
+.im-zoom-btn:active { background: #e5e9ee; }
+.im-zoom-btn:focus-visible {
+  outline: 2px solid var(--hb-cta, #f45f30);
+  outline-offset: -2px;
+}
+
+/* 44px on touch: the desktop 34px is below the comfortable target size, and
+   these sit at the corner of a map the finger is also dragging. */
+@media (hover: none) and (pointer: coarse) {
+  .im-zoom-btn { width: 44px; height: 44px; font-size: 22px; }
+  /* Same reasoning for the reset: 44px of height on a control that shares the
+     map with a dragging finger. */
+  .im-reset-btn { padding: 14px 16px; font-size: 14px; }
+}

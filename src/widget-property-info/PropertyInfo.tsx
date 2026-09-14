@@ -9,7 +9,8 @@ import {
   Breadcrumb, collapseMiddle, locationCrumbHead, normaliseBase, placeSlug,
   LOCATION_BASE_PATH, type Crumb,
 } from '@shared/Breadcrumb';
-import { fetchPropertyImages } from '@shared/propertyImages';
+import { fetchPropertyMedia } from '@shared/propertyImages';
+import { VideoSlide, videoPosterOrFallback } from './VideoSlide';
 import { fetchReviewSource } from '@shared/reviewsCollections';
 import {
   MapPinIcon, MapPinSolidIcon, PhoneIcon, EnvelopeIcon, ClockIcon, CalendarCheckIcon,
@@ -18,6 +19,10 @@ import {
 } from './icons';
 import { MessageModal } from '@shared/components/MessageModal';
 import { CloseCircleIcon } from '@shared/ui/icons';
+import { InteractiveMap } from '@shared/InteractiveMap';
+// boundText: a Duda content field can arrive as an unsubstituted {{handlebars}}
+// token, which would be sent to Google as a key and rejected.
+import { boundText } from '@shared/propertyBinding';
 
 // ---------------------------------------------------------------------------
 // Types + demo data
@@ -38,6 +43,20 @@ export interface PropertyInfoProps {
   rating?: number;
   reviewCount?: number;
   reviewsUrl?: string;
+  /**
+   * Proxy base serving the Maps key, so the map can be dragged with ONE finger
+   * on a phone. An embedded map needs two — Google's behaviour inside the
+   * iframe, which no CSS of ours reaches.
+   *
+   * NOT the key itself. The JS API authenticates from the page so the key
+   * cannot be hidden, but it need not be hardcoded here or in the Duda JS tab:
+   * the proxy serves it from /api/maps/config and it is rotated in one place.
+   *
+   * Unset, the shared default proxy is used; if that has no key configured the
+   * map stays the keyless embed it has always been, which still pans on
+   * desktop. Nothing breaks without it.
+   */
+  mapsProxyBase?: string;
   address?: string;
   addressUrl?: string;
   phones?: PhoneEntry[];
@@ -193,10 +212,18 @@ const HOURS_MOBILE: { title: string; rows: string[] }[] = [
  * is a skeleton (see `imagesLoading`); these appear only once the lookup has
  * settled empty, so a facility without uploads still looks like a facility
  * rather than a grey gradient.
+ *
+ * SERVED FROM S3, NOT DUDA'S CDN. These were
+ * `irp.cdn-website.com/37c2908c/dms3rep/multi/…` — a path built from ONE site
+ * id. Every site spun up from this template reuses these same published
+ * bundles, so on any site but 37c2908c that URL 403s (Duda answers a missing
+ * file 403, not 404) and the fallback itself rendered broken. The shared
+ * bucket is not per-site, so it works everywhere. Byte-identical files —
+ * verified 2026-09-11, both hosts return the same 1.7MB / 1.8MB images.
  */
 const DEFAULT_GALLERY = [
-  'https://irp.cdn-website.com/37c2908c/dms3rep/multi/Hallway.png',
-  'https://irp.cdn-website.com/37c2908c/dms3rep/multi/Boxes.png',
+  'https://dr2r4w0s7b8qm.cloudfront.net/duda-unit-images/Boxes.png',
+  'https://dr2r4w0s7b8qm.cloudfront.net/duda-unit-images/Hallway.png',
 ];
 
 const DEFAULTS: Required<Pick<PropertyInfoProps, 'name' | 'rating' | 'reviewCount' | 'address' | 'phones' | 'gateStatus' | 'gateNote' | 'officeStatus' | 'officeNote' | 'breadcrumb'>> = {
@@ -229,6 +256,7 @@ export function PropertyInfo(props: Props) {
     rating = DEFAULTS.rating,
     reviewCount = DEFAULTS.reviewCount,
     reviewsUrl = '#',
+    mapsProxyBase,
     address = DEFAULTS.address,
     addressUrl = '#',
     phones = DEFAULTS.phones,
@@ -373,6 +401,8 @@ export function PropertyInfo(props: Props) {
   // fetchPropertyDetails: that call has a REST fallback and this has none, so a
   // missing collection must not look like a failed property lookup.
   const [collectionImages, setCollectionImages] = useState<string[]>([]);
+  /** The `video` column, appended AFTER the photos. Empty when unset. */
+  const [collectionVideos, setCollectionVideos] = useState<string[]>([]);
   // The photo lookup runs AFTER the property resolves, so it outlives the
   // widget's own loading gate. Without tracking it separately the gallery would
   // paint the fallbacks and then swap them for the real photos a moment later —
@@ -380,9 +410,17 @@ export function PropertyInfo(props: Props) {
   const [imagesLoading, setImagesLoading] = useState(true);
   useEffect(() => {
     const id = property?.id;
-    // Clear first — otherwise switching row in the dynamic-page dropdown shows
-    // the previous property's photos until the new ones land.
+    /*
+     * Clear BOTH first — otherwise switching row in the dynamic-page dropdown
+     * shows the previous property's media until the new lot lands.
+     *
+     * The video needs this at least as much as the photos: a rejected lookup,
+     * or an id that becomes undefined, never reaches the `.then`, so the old
+     * list would survive and the gallery would lead with the PREVIOUS
+     * property's video over this one's photos.
+     */
     setCollectionImages([]);
+    setCollectionVideos([]);
     if (!id) {
       // Nothing to wait for: an unbound widget resolves no property, so the
       // props/defaults are already the final answer.
@@ -391,8 +429,12 @@ export function PropertyInfo(props: Props) {
     }
     setImagesLoading(true);
     let cancelled = false;
-    fetchPropertyImages(id)
-      .then((urls) => { if (!cancelled) setCollectionImages(urls); })
+    fetchPropertyMedia(id)
+      .then((m) => {
+        if (cancelled) return;
+        setCollectionImages(m.images);
+        setCollectionVideos(m.videos);
+      })
       .catch((err) => console.warn('[PropertyInfo] property images unavailable:', err))
       .finally(() => { if (!cancelled) setImagesLoading(false); });
     return () => { cancelled = true; };
@@ -493,16 +535,24 @@ export function PropertyInfo(props: Props) {
     ? addressUrl
     : hasCoords ? `https://www.google.com/maps?q=${property!.lat},${property!.lng}` : '#';
 
-  // Real embedded map when the API gave us coordinates; CSS placeholder otherwise.
+  /*
+   * The map, when the API gave us coordinates; the CSS placeholder otherwise.
+   *
+   * No longer role="img": it is draggable and zoomable, so calling it an image
+   * told a screen reader the opposite of what it is. InteractiveMap labels the
+   * live canvas itself.
+   *
+   * With no mapsApiKey it renders the same keyless embed as before, so a site
+   * that has not configured one is exactly where it was.
+   */
   const mapEl = (
-    <div className="pi-map" role="img" aria-label="Map showing the property location">
+    <div className="pi-map">
       {hasCoords ? (
-        <iframe
-          className="pi-map-iframe"
+        <InteractiveMap
+          lat={property!.lat as number}
+          lng={property!.lng as number}
           title={`Map of ${displayName}`}
-          src={`https://www.google.com/maps?q=${property!.lat},${property!.lng}&z=15&output=embed`}
-          loading="lazy"
-          referrerPolicy="no-referrer-when-downgrade"
+          proxyBase={boundText(mapsProxyBase) || undefined}
         />
       ) : (
         <span className="pi-map-pin" />
@@ -525,7 +575,8 @@ export function PropertyInfo(props: Props) {
   //      they must beat a single hero image set once on the widget, which would
   //      otherwise show the same photo on every dynamic page;
   //   2. the heroImage/images props (a static page, or the Duda editor);
-  //   3. DEFAULT_GALLERY, so a property with no uploads still shows photos.
+  //   3. DEFAULT_GALLERY — the shared S3 pair, so a property with no uploads
+  //      still shows photos rather than grey gradients.
   const provided = (collectionImages.length
     ? collectionImages
     : [heroImage, ...(images ?? [])]
@@ -545,8 +596,31 @@ export function PropertyInfo(props: Props) {
     });
   }, [index, lightbox]);
 
-  const slides = provided.length ? provided : DEFAULT_GALLERY;
-  const heroSlide = slides[0];
+  /*
+   * Photos first, then any video — "after appending images", as asked.
+   *
+   * Slides stay a flat list of URLs rather than becoming tagged objects: the
+   * inline track, the lightbox track, the thumbnail rail and every index
+   * calculation (wrap-around, dots, drag) address this one array, and retyping
+   * it would touch all of them for no gain. Which entries are videos is
+   * answered by the Set below instead.
+   */
+  /** Photos alone — what the hero banners want, and the tail of the slider. */
+  const photoSlides = provided.length ? provided : DEFAULT_GALLERY;
+  /* Video LEADS the gallery: it is the richest thing the property has, so it
+     is what the slider opens on. Photos follow in their existing order. */
+  const slides = [...collectionVideos, ...photoSlides];
+  /** Membership, not a scan — the render asks this once per slide per frame. */
+  const videoSlides = React.useMemo(() => new Set(collectionVideos), [collectionVideos]);
+  /*
+   * The first PHOTO, not the first slide.
+   *
+   * Both hero banners render this through <ImageFill>, i.e. an <img>. Now that
+   * a video can lead `slides`, taking slides[0] would hand a YouTube URL to an
+   * image tag — a broken picture as the mobile banner and the hero layout's
+   * background. A still is what those want anyway.
+   */
+  const heroSlide = photoSlides[0];
   const overlay = Math.max(0, Math.min(1, overlayOpacity / 100));
 
   const prev = () => setIndex((i) => (i - 1 + slides.length) % slides.length);
@@ -813,7 +887,14 @@ export function PropertyInfo(props: Props) {
           >
             {[slides[slides.length - 1], ...slides, slides[0]].map((src, i) => (
               <span className="pi-lb-cell" key={`lb-${i}-${src}`} aria-hidden={i === lbCell ? undefined : true}>
-                <ImageFill className="pi-lb-img" src={src} onClick={(e) => e.stopPropagation()} />
+                {videoSlides.has(src)
+                  /* The clones at either end mean a video appears three times
+                     in this list; `active` keys off the CELL, so only the one
+                     actually on screen can ever hold a player. */
+                  /* `interactive`: the lightbox has no button wrapping the
+                     cell, so the poster can be one and play on click. */
+                  ? <VideoSlide className="pi-lb-img" src={src} active={i === lbCell} title={displayName} interactive />
+                  : <ImageFill className="pi-lb-img" src={src} onClick={(e) => e.stopPropagation()} />}
               </span>
             ))}
           </span>
@@ -831,7 +912,11 @@ export function PropertyInfo(props: Props) {
                 aria-current={i === index || undefined}
                 onClick={(e) => { e.stopPropagation(); lbGoTo(i); }}
               >
-                <ImageFill className="pi-lb-thumb-img" src={src} />
+                {/* A thumbnail is never a player — it is a target to click.
+                    The poster carries the play badge so a video reads as one
+                    in the rail. */}
+                <ImageFill className="pi-lb-thumb-img" src={videoSlides.has(src) ? videoPosterOrFallback(src) : src} />
+                {videoSlides.has(src) && <span className="pi-lb-thumb-play" aria-hidden="true" />}
               </button>
             ))}
           </div>
@@ -980,7 +1065,12 @@ export function PropertyInfo(props: Props) {
               >
                 {slides.map((src, i) => (
                   <span className="pi-gallery-slide" key={`${src}-${i}`}>
-                    <ImageFill className="pi-gallery-img" src={src} />
+                    {videoSlides.has(src)
+                      /* Muted autoplay HERE only. The lightbox keeps its
+                         poster: a full-screen video starting on its own is
+                         jarring, and nobody opens it by accident. */
+                      ? <VideoSlide className="pi-gallery-img" src={src} active={i === index} title={displayName} autoPlay />
+                      : <ImageFill className="pi-gallery-img" src={src} />}
                   </span>
                 ))}
               </span>

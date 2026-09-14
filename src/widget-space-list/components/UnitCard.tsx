@@ -1,7 +1,6 @@
 ﻿import React from 'react';
 import type { Unit, WidgetConfig } from '../types';
 import { PriceBlock, PromoBadge, FeatureList, CtaButton, JunkFeeDisclaimer } from './Pricing';
-import defaultImg from '../assets/tenantinc-default.png';
 import { unitImageSrc, unitImageOnError } from './unitImage';
 
 export function UnitCard({ unit, config }: { unit: Unit; config: WidgetConfig }) {
@@ -20,7 +19,12 @@ export function UnitCard({ unit, config }: { unit: Unit; config: WidgetConfig })
             <FeatureList features={unit.features} />
           </div>
           <div className="sl-card-image-col">
-            <img className="sl-unit-img" src={unitImageSrc(unit, defaultImg)} alt="Storage Unit" onError={unitImageOnError(unit, defaultImg)} />
+            {/* No artwork ⇒ no element. See unitImage.ts: a generic
+                placeholder on a card selling a specific space reads as that
+                space's own photo, which is worse than showing none. */}
+            {unitImageSrc(unit) && (
+              <img className="sl-unit-img" src={unitImageSrc(unit)} alt="Storage Unit" onError={unitImageOnError(unit)} />
+            )}
             <a href="#" className="sl-see-fits">
               See what fits
               {/* Pika play/play-circle (outline) — inherits currentColor from .sl-see-fits. */}
